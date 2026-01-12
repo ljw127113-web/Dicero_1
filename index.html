@@ -1954,9 +1954,14 @@
             const sheet = XLSX.utils.aoa_to_sheet([]);
             
             // 设置前5行的固定值
+            // 第1行：A列="##var", B列="id", C列="chapter", D列="stage", E列="stageType", F列="bossAnim", G列="stageExp"
+            // 第2行：A列="##var", B列="", C列="", D列="", E列="", F列="", G列=""
+            // 第3行：A列="##type", B列="int", C列="int", D列="int", E列="int", F列="(array#sep=*),float", G列="int"
+            // 第4行：A列="##group", B列="c,s", C列="c,s", D列="c,s", E列="c,s", F列="c,s", G列="c,s"
+            // 第5行：A列="##", B列="层ID", C列="章节ID", D列="层ID", E列="层类型", F列="BOSS虚影", G列="过关经验值"
             const headerData = [
-                ['##var', '##var', '##var', '##var', '##var', '##var', '##var'], // 第1行
-                ['##var', 'id', 'chapter', 'stage', 'stageType', 'bossAnim', 'stageExp'], // 第2行
+                ['##var', 'id', 'chapter', 'stage', 'stageType', 'bossAnim', 'stageExp'], // 第1行
+                ['##var', '', '', '', '', '', ''], // 第2行（B列及后续列为空）
                 ['##type', 'int', 'int', 'int', 'int', '(array#sep=*),float', 'int'], // 第3行
                 ['##group', 'c,s', 'c,s', 'c,s', 'c,s', 'c,s', 'c,s'], // 第4行
                 ['##', '层ID', '章节ID', '层ID', '层类型', 'BOSS虚影', '过关经验值'] // 第5行
@@ -2014,9 +2019,14 @@
             const sheet = XLSX.utils.aoa_to_sheet([]);
             
             // 设置前5行的固定值
+            // 第1行：A列="##var", B列="id", C列="eventId", D列="eventFirst"
+            // 第2行：A列="##var", B列="", C列="", D列=""
+            // 第3行：A列="##type", B列="int", C列="(array#sep=|),(array#sep=*),int", D列="int"
+            // 第4行：A列="##group", B列="c,s", C列="c,s", D列="c,s"
+            // 第5行：A列="##", B列="层ID", C列="事件随机", D列="首次事件"
             const headerData = [
-                ['##var', '##var', '##var', '##var'], // 第1行
-                ['##var', 'id', 'eventId', 'eventFirst'], // 第2行
+                ['##var', 'id', 'eventId', 'eventFirst'], // 第1行
+                ['##var', '', '', ''], // 第2行（B列及后续列为空）
                 ['##type', 'int', '(array#sep=|),(array#sep=*),int', 'int'], // 第3行
                 ['##group', 'c,s', 'c,s', 'c,s'], // 第4行
                 ['##', '层ID', '事件随机', '首次事件'] // 第5行
@@ -2062,9 +2072,14 @@
             const sheet = XLSX.utils.aoa_to_sheet([]);
             
             // 设置前5行的固定值
+            // 第1行：A列="##var", B列="id", C列="hp", D列="atk", E列="firstHp", F列="firstAtk", G列="group", H列="rogue", I列="point", J列="roll", K列="diceHand", L列="prop", M列="enemyExp", N列="stageExp"
+            // 第2行：A列="##var", B列及后续列全部为空
+            // 第3行：A列="##type", B列="int", C列="int", ...
+            // 第4行：A列="##group", B列="c,s", C列="c,s", ...
+            // 第5行：A列="##", B列="层ID", C列="标准血量", ...
             const headerData = [
-                ['##var', '##var', '##var', '##var', '##var', '##var', '##var', '##var', '##var', '##var', '##var', '##var', '##var', '##var'], // 第1行
-                ['##var', 'id', 'hp', 'atk', 'firstHp', 'firstAtk', 'group', 'rogue', 'point', 'roll', 'diceHand', 'prop', 'enemyExp', 'stageExp'], // 第2行
+                ['##var', 'id', 'hp', 'atk', 'firstHp', 'firstAtk', 'group', 'rogue', 'point', 'roll', 'diceHand', 'prop', 'enemyExp', 'stageExp'], // 第1行
+                ['##var', '', '', '', '', '', '', '', '', '', '', '', '', ''], // 第2行（B列及后续列为空）
                 ['##type', 'int', 'int', 'int', 'int', 'int', '(array#sep=*),int', '(array#sep=*),int', '(array#sep=|),(array#sep=*),int', '(array#sep=|),(array#sep=*),int', '(array#sep=*),int', '(array#sep=|),(array#sep=*),int', 'int', 'int'], // 第3行
                 ['##group', 'c,s', 'c,s', 'c,s', 'c,s', 'c,s', 'c,s', 'c,s', 'c,s', 'c,s', 'c,s', 'c,s', 'c,s', 'c,s'], // 第4行
                 ['##', '层ID', '标准血量', '标准攻击力', '第一次血量', '第一次攻击力', '随机敌人组', '结束是否有rogue', '第一次到达必出点数', '第几次重置出某个点数', '牌型概率', '道具掉落', '单怪掉落经验值', '过关经验值'] // 第5行
@@ -2154,9 +2169,14 @@
             const sheet = XLSX.utils.aoa_to_sheet([]);
             
             // 设置前5行的固定值
+            // 第1行：A列="##var", B列="id", C列="groupId", D列="enemy", E列="position", F列="start", G列="passiveSkill", H列="hpTimes", I列="atkTimes", J列="skillOrder"
+            // 第2行：A列="##var", B列及后续列全部为空
+            // 第3行：A列="##type", B列="int", C列="int", ...
+            // 第4行：A列="##group", B列="c,s", C列="c,s", ...
+            // 第5行：A列="##", B列="唯一ID", C列="敌人组ID", ...
             const headerData = [
-                ['##var', '##var', '##var', '##var', '##var', '##var', '##var', '##var', '##var', '##var'], // 第1行
-                ['##var', 'id', 'groupId', 'enemy', 'position', 'start', 'passiveSkill', 'hpTimes', 'atkTimes', 'skillOrder'], // 第2行
+                ['##var', 'id', 'groupId', 'enemy', 'position', 'start', 'passiveSkill', 'hpTimes', 'atkTimes', 'skillOrder'], // 第1行
+                ['##var', '', '', '', '', '', '', '', '', ''], // 第2行（B列及后续列为空）
                 ['##type', 'int', 'int', 'temp.EEnemy', 'int', '(array#sep=*),int', '(array#sep=*),int', '(array#sep=*),float', '(array#sep=*),float', '(array#sep=*),temp.EEnemyBehavior'], // 第3行
                 ['##group', 'c,s', 'c,s', 'c,s', 'c,s', 'c,s', 'c,s', 'c,s', 'c,s', 'c,s'], // 第4行
                 ['##', '唯一ID', '敌人组ID', '敌人ID', '站位', '怪物初始状态', '常驻被动技能', '标准血量倍率范围', '标准攻击力倍率范围', '技能顺序'] // 第5行
