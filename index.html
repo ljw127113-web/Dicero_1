@@ -420,6 +420,7 @@
                 <div class="step-tabs">
                     <div class="step-tab active" data-step="1">步骤1: 源文件显示</div>
                     <div class="step-tab" data-step="2">步骤2: 数据处理</div>
+                    <div class="step-tab" data-step="2.5">步骤2.5: 上传怪物组（可选）</div>
                     <div class="step-tab" data-step="3">步骤3: 导出文件</div>
                 </div>
                 <div class="step-content" id="stepContent">
@@ -469,6 +470,23 @@
                             <h4 style="margin-bottom: 10px;">处理后的数据预览</h4>
                             <div id="processedSheetTabs" class="sheet-tabs"></div>
                             <div id="processedTableContainer"></div>
+                        </div>
+                    </div>
+                    <!-- 步骤2.5内容：上传怪物组（可选） -->
+                    <div class="step-panel" id="step2_5Panel" style="display: none;">
+                        <h3>上传怪物组（可选）</h3>
+                        <div style="padding: 20px; background: #f8f9fa; border-radius: 8px; margin-bottom: 20px;">
+                            <p style="margin-bottom: 15px;">上传一个怪物组文件，将覆盖步骤2生成的怪物组数据。如果不上传，将使用步骤2生成的数据。</p>
+                            <div style="margin-bottom: 15px;">
+                                <input type="file" id="monsterGroupFileInput" accept=".xlsx,.xlsm,.xls" style="width: 100%; padding: 8px; border: 2px solid #ddd; border-radius: 5px;">
+                            </div>
+                            <button class="btn btn-primary" onclick="uploadMonsterGroup()">上传并解析怪物组</button>
+                            <div id="monsterGroupUploadResult" style="margin-top: 15px; padding: 10px; background: white; border-radius: 5px; display: none;"></div>
+                        </div>
+                        <div id="uploadedMonsterGroupDisplay" style="display: none;">
+                            <h4 style="margin-bottom: 10px;">上传的怪物组数据预览</h4>
+                            <div id="uploadedMonsterGroupSheetTabs" class="sheet-tabs"></div>
+                            <div id="uploadedMonsterGroupTableContainer"></div>
                         </div>
                     </div>
                     <!-- 步骤3内容：导出文件 -->
@@ -553,6 +571,8 @@
         let workbookData = null;
         let globalGeneratedData = null; // 存储生成的怪物组数据，供导出使用
         let globalPlanData = null; // 存储"关卡规划总"的原始数据，供导出使用
+        let uploadedMonsterGroupData = null; // 存储上传的怪物组数据，如果存在则覆盖globalGeneratedData
+        let uploadedMonsterGroupWorkbook = null; // 存储上传的怪物组工作簿
 
         // 文件上传区域事件
         const uploadArea = document.getElementById('uploadArea');
@@ -719,6 +739,10 @@
             // 显示对应的面板
             document.getElementById('step1Panel').style.display = step === '1' ? 'block' : 'none';
             document.getElementById('step2Panel').style.display = step === '2' ? 'block' : 'none';
+            const step2_5Panel = document.getElementById('step2_5Panel');
+            if (step2_5Panel) {
+                step2_5Panel.style.display = step === '2.5' ? 'block' : 'none';
+            }
             document.getElementById('step3Panel').style.display = step === '3' ? 'block' : 'none';
             
             // 确保源文件显示区域在步骤1时显示
@@ -1893,6 +1917,223 @@
             displayProcessedData(processedWorkbook);
         }
 
+        // 上传并解析怪物组文件
+        function uploadMonsterGroup() {
+            const fileInput = document.getElementById('monsterGroupFileInput');
+            if (!fileInput || !fileInput.files || fileInput.files.length === 0) {
+                alert('请先选择要上传的怪物组文件');
+                return;
+            }
+
+            const file = fileInput.files[0];
+            const resultDiv = document.getElementById('monsterGroupUploadResult');
+            
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const data = new Uint8Array(e.target.result);
+                    const workbook = XLSX.read(data, { type: 'array', cellStyles: true });
+                    
+                    // 查找"怪物组"sheet页
+                    let monsterGroupSheet = null;
+                    let monsterGroupSheetName = null;
+                    for (let sheetName of workbook.SheetNames) {
+                        if (sheetName.includes('怪物组')) {
+                            monsterGroupSheet = workbook.Sheets[sheetName];
+                            monsterGroupSheetName = sheetName;
+                            break;
+                        }
+                    }
+                    
+                    if (!monsterGroupSheet) {
+                        alert('未找到"怪物组"sheet页');
+                        resultDiv.innerHTML = '<span style="color: #dc3545;">上传失败：未找到"怪物组"sheet页</span>';
+                        resultDiv.style.display = 'block';
+                        return;
+                    }
+                    
+                    // 解析怪物组数据
+                    const jsonData = XLSX.utils.sheet_to_json(monsterGroupSheet, { header: 1, defval: '' });
+                    if (jsonData.length < 2) {
+                        alert('怪物组数据为空');
+                        resultDiv.innerHTML = '<span style="color: #dc3545;">上传失败：怪物组数据为空</span>';
+                        resultDiv.style.display = 'block';
+                        return;
+                    }
+                    
+                    // 自动查找表头行（查找包含"唯一ID"和"敌人组ID"的行）
+                    let headerRowIndex = -1;
+                    let headerRow = [];
+                    for (let row = 0; row < Math.min(10, jsonData.length); row++) {
+                        const rowData = jsonData[row];
+                        let hasUniqueId = false;
+                        let hasEnemyGroupId = false;
+                        for (let col = 0; col < rowData.length; col++) {
+                            const cellValue = String(rowData[col] || '').trim();
+                            if (cellValue.includes('唯一ID') || cellValue === '唯一ID') {
+                                hasUniqueId = true;
+                            }
+                            if (cellValue.includes('敌人组ID') || cellValue === '敌人组ID') {
+                                hasEnemyGroupId = true;
+                            }
+                        }
+                        if (hasUniqueId && hasEnemyGroupId) {
+                            headerRowIndex = row;
+                            headerRow = rowData;
+                            break;
+                        }
+                    }
+                    
+                    if (headerRowIndex < 0) {
+                        // 如果没找到，尝试使用第5行（索引4）作为表头（标准格式）
+                        if (jsonData.length > 4) {
+                            headerRowIndex = 4;
+                            headerRow = jsonData[4] || [];
+                        } else {
+                            alert('怪物组文件格式不正确：无法找到表头行（包含"唯一ID"和"敌人组ID"的行）');
+                            resultDiv.innerHTML = '<span style="color: #dc3545;">上传失败：无法找到表头行</span><br><span style="color: #6c757d; font-size: 0.9em;">请确保文件中包含"唯一ID"和"敌人组ID"列</span>';
+                            resultDiv.style.display = 'block';
+                            return;
+                        }
+                    }
+                    
+                    // 查找各列的索引
+                    let uniqueIdColIndex = -1;
+                    let enemyGroupIdColIndex = -1;
+                    let enemyIdColIndex = -1;
+                    let positionColIndex = -1;
+                    let hpTimesColIndex = -1;
+                    let atkTimesColIndex = -1;
+                    let stageSeqColIndex = -1;
+                    let skillOrderColIndex = -1;
+                    
+                    for (let i = 0; i < headerRow.length; i++) {
+                        const header = String(headerRow[i] || '').trim();
+                        const headerLower = header.toLowerCase();
+                        if (header.includes('唯一ID') || header === '唯一ID' || headerLower.includes('唯一id')) {
+                            uniqueIdColIndex = i;
+                        } else if (header.includes('敌人组ID') || header === '敌人组ID' || headerLower.includes('敌人组id')) {
+                            enemyGroupIdColIndex = i;
+                        } else if (header.includes('敌人ID') || header === '敌人ID' || headerLower.includes('敌人id')) {
+                            enemyIdColIndex = i;
+                        } else if (header.includes('站位') || header === '站位') {
+                            positionColIndex = i;
+                        } else if (header.includes('标准血量倍率范围') || header === '标准血量倍率范围') {
+                            hpTimesColIndex = i;
+                        } else if (header.includes('标准攻击力倍率范围') || header === '标准攻击力倍率范围') {
+                            atkTimesColIndex = i;
+                        } else if (header.includes('小关序号') || header === '小关序号') {
+                            stageSeqColIndex = i;
+                        } else if (header.includes('技能顺序') || header === '技能顺序') {
+                            skillOrderColIndex = i;
+                        }
+                    }
+                    
+                    // 调试信息：输出找到的列索引
+                    console.log('怪物组文件解析:', {
+                        headerRowIndex: headerRowIndex,
+                        headerRow: headerRow,
+                        uniqueIdColIndex: uniqueIdColIndex,
+                        enemyGroupIdColIndex: enemyGroupIdColIndex,
+                        enemyIdColIndex: enemyIdColIndex,
+                        positionColIndex: positionColIndex,
+                        hpTimesColIndex: hpTimesColIndex,
+                        atkTimesColIndex: atkTimesColIndex,
+                        stageSeqColIndex: stageSeqColIndex
+                    });
+                    
+                    if (uniqueIdColIndex < 0 || enemyGroupIdColIndex < 0) {
+                        alert('怪物组文件格式不正确：缺少必要的列（唯一ID、敌人组ID）\n\n找到的表头行：' + JSON.stringify(headerRow));
+                        resultDiv.innerHTML = '<span style="color: #dc3545;">上传失败：文件格式不正确</span><br><span style="color: #6c757d; font-size: 0.9em;">表头行：' + JSON.stringify(headerRow) + '</span>';
+                        resultDiv.style.display = 'block';
+                        return;
+                    }
+                    
+                    // 解析数据（从表头行的下一行开始）
+                    const parsedData = [];
+                    const dataStartRow = headerRowIndex + 1;
+                    for (let row = dataStartRow; row < jsonData.length; row++) {
+                        const rowData = jsonData[row];
+                        const uniqueId = rowData[uniqueIdColIndex];
+                        const enemyGroupId = rowData[enemyGroupIdColIndex];
+                        
+                        // 如果唯一ID或敌人组ID为空，跳过该行
+                        if ((uniqueId === '' || uniqueId === null || uniqueId === undefined) &&
+                            (enemyGroupId === '' || enemyGroupId === null || enemyGroupId === undefined)) {
+                            continue;
+                        }
+                        
+                        // 从globalGeneratedData中查找对应的章节ID、关卡类型、主题等信息
+                        // 如果找不到，尝试从enemyGroupId推断（需要根据实际情况调整）
+                        let chapterId = null;
+                        let stageType = null;
+                        let theme = null;
+                        let stageSeq = null;
+                        let monsterCount = null;
+                        
+                        if (globalGeneratedData) {
+                            // 根据enemyGroupId查找匹配的数据
+                            const matchedData = globalGeneratedData.find(d => 
+                                d.enemyGroupId === enemyGroupId || 
+                                (Number(d.enemyGroupId) === Number(enemyGroupId))
+                            );
+                            if (matchedData) {
+                                chapterId = matchedData.chapterId;
+                                stageType = matchedData.stageType;
+                                theme = matchedData.theme;
+                                stageSeq = matchedData.stageSeq;
+                                monsterCount = matchedData.monsterCount;
+                            }
+                        }
+                        
+                        // 如果从上传文件中读取到了小关序号，使用它
+                        if (stageSeqColIndex >= 0 && rowData[stageSeqColIndex] !== '' && rowData[stageSeqColIndex] !== null && rowData[stageSeqColIndex] !== undefined) {
+                            stageSeq = rowData[stageSeqColIndex];
+                        }
+                        
+                        parsedData.push({
+                            uniqueId: uniqueId !== '' && uniqueId !== null && uniqueId !== undefined ? Number(uniqueId) : null,
+                            enemyGroupId: enemyGroupId !== '' && enemyGroupId !== null && enemyGroupId !== undefined ? Number(enemyGroupId) : null,
+                            enemyId: enemyIdColIndex >= 0 ? (rowData[enemyIdColIndex] || '') : '',
+                            position: positionColIndex >= 0 ? (rowData[positionColIndex] || '') : '',
+                            hpTimes: hpTimesColIndex >= 0 ? (rowData[hpTimesColIndex] || '') : '',
+                            atkTimes: atkTimesColIndex >= 0 ? (rowData[atkTimesColIndex] || '') : '',
+                            skillOrder: skillOrderColIndex >= 0 ? (rowData[skillOrderColIndex] || '') : '',
+                            chapterId: chapterId,
+                            stageType: stageType,
+                            theme: theme,
+                            stageSeq: stageSeq,
+                            monsterCount: monsterCount
+                        });
+                    }
+                    
+                    if (parsedData.length === 0) {
+                        alert('解析后的怪物组数据为空');
+                        resultDiv.innerHTML = '<span style="color: #dc3545;">上传失败：解析后的数据为空</span>';
+                        resultDiv.style.display = 'block';
+                        return;
+                    }
+                    
+                    // 保存上传的数据
+                    uploadedMonsterGroupData = parsedData;
+                    uploadedMonsterGroupWorkbook = workbook;
+                    
+                    resultDiv.innerHTML = `<strong style="color: #28a745;">上传成功！</strong><br>已解析 ${parsedData.length} 条怪物组数据<br><span style="color: #6c757d; font-size: 0.9em;">导出时将使用上传的怪物组数据</span>`;
+                    resultDiv.style.display = 'block';
+                    
+                    // 显示上传的怪物组数据
+                    displayUploadedMonsterGroup(workbook);
+                    
+                } catch (error) {
+                    console.error('解析怪物组文件错误:', error);
+                    alert('文件解析失败：' + error.message);
+                    resultDiv.innerHTML = `<span style="color: #dc3545;">上传失败：${error.message}</span>`;
+                    resultDiv.style.display = 'block';
+                }
+            };
+            reader.readAsArrayBuffer(file);
+        }
+
         // 显示处理后的数据
         function displayProcessedData(wb) {
             const displayDiv = document.getElementById('processedDataDisplay');
@@ -1922,6 +2163,74 @@
         // 显示处理后的sheet数据
         function displayProcessedSheet(sheet, sheetName) {
             const container = document.getElementById('processedTableContainer');
+            const range = XLSX.utils.decode_range(sheet['!ref'] || 'A1');
+            
+            let html = '<div class="table-wrapper"><table class="excel-table"><thead><tr>';
+            html += '<th class="row-header">行/列</th>';
+            for (let C = range.s.c; C <= range.e.c; C++) {
+                const colName = getExcelColumnName(C);
+                html += `<th>${colName}</th>`;
+            }
+            html += '</tr></thead><tbody>';
+
+            for (let R = range.s.r; R <= range.e.r; R++) {
+                html += '<tr>';
+                html += `<td class="row-header">${R + 1}</td>`;
+                for (let C = range.s.c; C <= range.e.c; C++) {
+                    const cellAddress = XLSX.utils.encode_cell({ r: R, c: C });
+                    const cell = sheet[cellAddress];
+                    const cellValue = cell ? (cell.w || cell.v || '') : '';
+                    const displayValue = cellValue === '' ? '&nbsp;' : escapeHtml(String(cellValue));
+                    html += `<td>${displayValue}</td>`;
+                }
+                html += '</tr>';
+            }
+
+            html += '</tbody></table></div>';
+            container.innerHTML = html;
+        }
+
+        // 显示上传的怪物组数据
+        function displayUploadedMonsterGroup(wb) {
+            const displayDiv = document.getElementById('uploadedMonsterGroupDisplay');
+            if (!displayDiv) {
+                console.error('未找到uploadedMonsterGroupDisplay元素');
+                return;
+            }
+            displayDiv.style.display = 'block';
+
+            // 创建sheet标签
+            const sheetTabsDiv = document.getElementById('uploadedMonsterGroupSheetTabs');
+            if (!sheetTabsDiv) {
+                console.error('未找到uploadedMonsterGroupSheetTabs元素');
+                return;
+            }
+            sheetTabsDiv.innerHTML = '';
+            wb.SheetNames.forEach((name, index) => {
+                const tab = document.createElement('div');
+                tab.className = 'sheet-tab' + (index === 0 ? ' active' : '');
+                tab.textContent = name;
+                tab.onclick = () => {
+                    document.querySelectorAll('#uploadedMonsterGroupSheetTabs .sheet-tab').forEach(t => t.classList.remove('active'));
+                    tab.classList.add('active');
+                    displayUploadedMonsterGroupSheet(wb.Sheets[name], name);
+                };
+                sheetTabsDiv.appendChild(tab);
+            });
+
+            // 显示第一个sheet
+            if (wb.SheetNames.length > 0) {
+                displayUploadedMonsterGroupSheet(wb.Sheets[wb.SheetNames[0]], wb.SheetNames[0]);
+            }
+        }
+
+        // 显示上传的怪物组sheet数据
+        function displayUploadedMonsterGroupSheet(sheet, sheetName) {
+            const container = document.getElementById('uploadedMonsterGroupTableContainer');
+            if (!container) {
+                console.error('未找到uploadedMonsterGroupTableContainer元素');
+                return;
+            }
             const range = XLSX.utils.decode_range(sheet['!ref'] || 'A1');
             
             let html = '<div class="table-wrapper"><table class="excel-table"><thead><tr>';
@@ -2247,8 +2556,10 @@
 
         // 第三部分：按章节导出文件
         function exportFiles() {
-            if (!globalGeneratedData || !globalPlanData || !workbookData) {
-                alert('请先处理数据（步骤2）');
+            // 检查是否有数据（优先使用上传的数据）
+            const sourceData = uploadedMonsterGroupData || globalGeneratedData;
+            if (!sourceData || !globalPlanData || !workbookData) {
+                alert('请先处理数据（步骤2）或上传怪物组文件（步骤2.5）');
                 return;
             }
 
@@ -2542,8 +2853,13 @@
                         }
                     }
                     
-                    // 筛选该章节的怪物组数据
-                    const chapterGroupData = globalGeneratedData.filter(item => item.chapterId === chapterId);
+                    // 筛选该章节的怪物组数据（优先使用上传的数据）
+                    const sourceData = uploadedMonsterGroupData || globalGeneratedData;
+                    if (!sourceData) {
+                        console.error(`章节 ${chapterId} 没有怪物组数据`);
+                        return; // 跳过当前章节
+                    }
+                    const chapterGroupData = sourceData.filter(item => item.chapterId === chapterId);
                     
                     // 构建stage_id数据（逐行遍历，不去重）
                     const stageData = [];
@@ -2677,7 +2993,7 @@
                         passiveSkill: '',
                         hpTimes: item.hpTimes,
                         atkTimes: item.atkTimes,
-                        skillOrder: ''
+                        skillOrder: item.skillOrder || '' // 从怪物组数据中读取技能顺序
                     })).sort((a, b) => {
                         // 先按enemyGroupId排序，再按uniqueId排序
                         if (a.enemyGroupId !== b.enemyGroupId) {
@@ -2711,17 +3027,20 @@
 
         // 导出怪物组（带时间戳）
         function exportMonsterGroup() {
-            if (!processedWorkbook) {
-                alert('请先处理数据（步骤2）');
+            // 优先使用上传的怪物组工作簿，否则使用处理后的工作簿
+            const sourceWorkbook = uploadedMonsterGroupWorkbook || processedWorkbook;
+            
+            if (!sourceWorkbook) {
+                alert('请先处理数据（步骤2）或上传怪物组文件（步骤2.5）');
                 return;
             }
             
             // 找到"怪物组"sheet页
             let monsterGroupSheet = null;
             let monsterGroupSheetName = null;
-            for (let sheetName of processedWorkbook.SheetNames) {
+            for (let sheetName of sourceWorkbook.SheetNames) {
                 if (sheetName.includes('怪物组')) {
-                    monsterGroupSheet = processedWorkbook.Sheets[sheetName];
+                    monsterGroupSheet = sourceWorkbook.Sheets[sheetName];
                     monsterGroupSheetName = sheetName;
                     break;
                 }
