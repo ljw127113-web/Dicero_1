@@ -2072,22 +2072,22 @@
             const sheet = XLSX.utils.aoa_to_sheet([]);
             
             // 设置前5行的固定值
-            // 第1行：A列="##var", B列="id", C列="hp", D列="atk", E列="firstHp", F列="firstAtk", G列="group", H列="rogue", I列="point", J列="roll", K列="diceHand", L列="prop", M列="enemyExp", N列="stageExp"
+            // 第1行：A列="##var", B列="id", C列="hp", D列="atk", E列="def", F列="firstHp", G列="firstAtk", H列="group", I列="rogue", J列="point", K列="roll", L列="diceHand", M列="prop", N列="enemyExp", O列="stageExp"
             // 第2行：A列="##var", B列及后续列全部为空
             // 第3行：A列="##type", B列="int", C列="int", ...
             // 第4行：A列="##group", B列="c,s", C列="c,s", ...
             // 第5行：A列="##", B列="层ID", C列="标准血量", ...
             const headerData = [
-                ['##var', 'id', 'hp', 'atk', 'firstHp', 'firstAtk', 'group', 'rogue', 'point', 'roll', 'diceHand', 'prop', 'enemyExp', 'stageExp'], // 第1行
-                ['##var', '', '', '', '', '', '', '', '', '', '', '', '', ''], // 第2行（B列及后续列为空）
-                ['##type', 'int', 'int', 'int', 'int', 'int', '(array#sep=*),int', '(array#sep=*),int', '(array#sep=|),(array#sep=*),int', '(array#sep=|),(array#sep=*),int', '(array#sep=*),int', '(array#sep=|),(array#sep=*),int', 'int', 'int'], // 第3行
-                ['##group', 'c,s', 'c,s', 'c,s', 'c,s', 'c,s', 'c,s', 'c,s', 'c,s', 'c,s', 'c,s', 'c,s', 'c,s', 'c,s'], // 第4行
-                ['##', '层ID', '标准血量', '标准攻击力', '第一次血量', '第一次攻击力', '随机敌人组', '结束是否有rogue', '第一次到达必出点数', '第几次重置出某个点数', '牌型概率', '道具掉落', '单怪掉落经验值', '过关经验值'] // 第5行
+                ['##var', 'id', 'hp', 'atk', 'def', 'firstHp', 'firstAtk', 'group', 'rogue', 'point', 'roll', 'diceHand', 'prop', 'enemyExp', 'stageExp'], // 第1行
+                ['##var', '', '', '', '', '', '', '', '', '', '', '', '', '', ''], // 第2行（B列及后续列为空）
+                ['##type', 'int', 'int', 'int', 'int', 'int', 'int', '(array#sep=*),int', '(array#sep=*),int', '(array#sep=|),(array#sep=*),int', '(array#sep=|),(array#sep=*),int', '(array#sep=*),int', '(array#sep=|),(array#sep=*),int', 'int', 'int'], // 第3行
+                ['##group', 'c,s', 'c,s', 'c,s', 'c,s', 'c,s', 'c,s', 'c,s', 'c,s', 'c,s', 'c,s', 'c,s', 'c,s', 'c,s', 'c,s'], // 第4行
+                ['##', '层ID', '标准血量', '标准攻击力', '标准防御力', '第一次血量', '第一次攻击力', '随机敌人组', '结束是否有rogue', '第一次到达必出点数', '第几次重置出某个点数', '牌型概率', '道具掉落', '单怪掉落经验值', '过关经验值'] // 第5行
             ];
             
             // 写入表头（前5行）
             for (let row = 0; row < 5; row++) {
-                for (let col = 0; col < 14; col++) {
+                for (let col = 0; col < 15; col++) {
                     const cellAddress = XLSX.utils.encode_cell({ r: row, c: col });
                     const value = headerData[row][col] || '';
                     sheet[cellAddress] = { v: value, t: 's' };
@@ -2111,55 +2111,59 @@
                     const cellAddressD = XLSX.utils.encode_cell({ r: row, c: 3 });
                     sheet[cellAddressD] = { v: item.atk || '', t: typeof item.atk === 'number' ? 'n' : 's' };
                     
-                    // E列（索引4）填入firstHp（第一次血量）
+                    // E列（索引4）填入def（标准防御力）
                     const cellAddressE = XLSX.utils.encode_cell({ r: row, c: 4 });
-                    sheet[cellAddressE] = { v: item.firstHp || '', t: typeof item.firstHp === 'number' ? 'n' : 's' };
+                    sheet[cellAddressE] = { v: item.def || '', t: typeof item.def === 'number' ? 'n' : 's' };
                     
-                    // F列（索引5）填入firstAtk（第一次攻击力）
+                    // F列（索引5）填入firstHp（第一次血量）
                     const cellAddressF = XLSX.utils.encode_cell({ r: row, c: 5 });
-                    sheet[cellAddressF] = { v: item.firstAtk || '', t: typeof item.firstAtk === 'number' ? 'n' : 's' };
+                    sheet[cellAddressF] = { v: item.firstHp || '', t: typeof item.firstHp === 'number' ? 'n' : 's' };
                     
-                    // G列（索引6）填入group（随机敌人组，小关序号*100+1）
+                    // G列（索引6）填入firstAtk（第一次攻击力）
                     const cellAddressG = XLSX.utils.encode_cell({ r: row, c: 6 });
-                    const groupValue = item.group !== '' && item.group !== null && item.group !== undefined ? item.group : '';
-                    sheet[cellAddressG] = { v: groupValue, t: typeof groupValue === 'number' ? 'n' : 's' };
+                    sheet[cellAddressG] = { v: item.firstAtk || '', t: typeof item.firstAtk === 'number' ? 'n' : 's' };
                     
-                    // H列（索引7）填入rogue（结束是否有rogue）
+                    // H列（索引7）填入group（随机敌人组，小关序号*100+1）
                     const cellAddressH = XLSX.utils.encode_cell({ r: row, c: 7 });
-                    sheet[cellAddressH] = { v: item.rogue || '', t: 's' };
+                    const groupValue = item.group !== '' && item.group !== null && item.group !== undefined ? item.group : '';
+                    sheet[cellAddressH] = { v: groupValue, t: typeof groupValue === 'number' ? 'n' : 's' };
                     
-                    // I列（索引8）填入point（第一次到达必出点数）
+                    // I列（索引8）填入rogue（结束是否有rogue）
                     const cellAddressI = XLSX.utils.encode_cell({ r: row, c: 8 });
-                    sheet[cellAddressI] = { v: item.point || '', t: 's' };
+                    sheet[cellAddressI] = { v: item.rogue || '', t: 's' };
                     
-                    // J列（索引9）填入roll（第几次重置出某个点数）
+                    // J列（索引9）填入point（第一次到达必出点数）
                     const cellAddressJ = XLSX.utils.encode_cell({ r: row, c: 9 });
-                    sheet[cellAddressJ] = { v: item.roll || '', t: 's' };
+                    sheet[cellAddressJ] = { v: item.point || '', t: 's' };
                     
-                    // K列（索引10）填入diceHand（牌型概率，如果有值）
+                    // K列（索引10）填入roll（第几次重置出某个点数）
                     const cellAddressK = XLSX.utils.encode_cell({ r: row, c: 10 });
-                    const diceHandValue = item.diceHand !== '' && item.diceHand !== null && item.diceHand !== undefined ? item.diceHand : '';
-                    sheet[cellAddressK] = { v: diceHandValue, t: 's' };
+                    sheet[cellAddressK] = { v: item.roll || '', t: 's' };
                     
-                    // L列（索引11）填入prop（道具掉落，如果有值）
+                    // L列（索引11）填入diceHand（牌型概率，如果有值）
                     const cellAddressL = XLSX.utils.encode_cell({ r: row, c: 11 });
-                    const propValue = item.prop !== '' && item.prop !== null && item.prop !== undefined ? item.prop : '';
-                    sheet[cellAddressL] = { v: propValue, t: 's' };
+                    const diceHandValue = item.diceHand !== '' && item.diceHand !== null && item.diceHand !== undefined ? item.diceHand : '';
+                    sheet[cellAddressL] = { v: diceHandValue, t: 's' };
                     
-                    // M列（索引12）填入enemyExp（单怪掉落经验值，如果有值）
+                    // M列（索引12）填入prop（道具掉落，如果有值）
                     const cellAddressM = XLSX.utils.encode_cell({ r: row, c: 12 });
-                    const enemyExpValue = item.enemyExp !== '' && item.enemyExp !== null && item.enemyExp !== undefined ? item.enemyExp : '';
-                    sheet[cellAddressM] = { v: enemyExpValue, t: typeof enemyExpValue === 'number' ? 'n' : 's' };
+                    const propValue = item.prop !== '' && item.prop !== null && item.prop !== undefined ? item.prop : '';
+                    sheet[cellAddressM] = { v: propValue, t: 's' };
                     
-                    // N列（索引13）填入stageExp（过关经验值）
+                    // N列（索引13）填入enemyExp（单怪掉落经验值，如果有值）
                     const cellAddressN = XLSX.utils.encode_cell({ r: row, c: 13 });
-                    sheet[cellAddressN] = { v: item.stageExp || '', t: typeof item.stageExp === 'number' ? 'n' : 's' };
+                    const enemyExpValue = item.enemyExp !== '' && item.enemyExp !== null && item.enemyExp !== undefined ? item.enemyExp : '';
+                    sheet[cellAddressN] = { v: enemyExpValue, t: typeof enemyExpValue === 'number' ? 'n' : 's' };
+                    
+                    // O列（索引14）填入stageExp（过关经验值）
+                    const cellAddressO = XLSX.utils.encode_cell({ r: row, c: 14 });
+                    sheet[cellAddressO] = { v: item.stageExp || '', t: typeof item.stageExp === 'number' ? 'n' : 's' };
                 });
             }
             
             // 设置范围
             const maxRow = Math.max(4, 5 + (battleData ? battleData.length - 1 : 0));
-            sheet['!ref'] = XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: maxRow, c: 13 } });
+            sheet['!ref'] = XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: maxRow, c: 14 } });
             
             return sheet;
         }
@@ -2265,6 +2269,7 @@
             let firstRandomEventColIndex = -1;
             let standardHpColIndex = -1;
             let standardAtkColIndex = -1;
+            let standardDefColIndex = -1;
             let diceHandColIndex = -1;
             let propColIndex = -1;
             let enemyExpColIndex = -1;
@@ -2308,6 +2313,9 @@
                 }
                 if (header.includes('标准攻击') || header === '标准攻击') {
                     standardAtkColIndex = i;
+                }
+                if (header.includes('防御') || header === '防御' || header.includes('标准防御')) {
+                    standardDefColIndex = i;
                 }
                 if (header.includes('牌型概率') || header === '牌型概率') {
                     diceHandColIndex = i;
@@ -2525,6 +2533,7 @@
                                 firstRandomEvent: firstRandomEventColIndex >= 0 ? planData[row][firstRandomEventColIndex] : '',
                                 standardHp: standardHpColIndex >= 0 ? planData[row][standardHpColIndex] : '',
                                 standardAtk: standardAtkColIndex >= 0 ? planData[row][standardAtkColIndex] : '',
+                                standardDef: standardDefColIndex >= 0 ? planData[row][standardDefColIndex] : '',
                                 diceHand: diceHandColIndex >= 0 ? planData[row][diceHandColIndex] : '',
                                 prop: propColIndex >= 0 ? planData[row][propColIndex] : '',
                                 enemyExp: enemyExpColIndex >= 0 ? planData[row][enemyExpColIndex] : '',
@@ -2642,6 +2651,7 @@
                                 id: stageSeq,
                                 hp: item.standardHp || '',
                                 atk: item.standardAtk || '',
+                                def: item.standardDef || '',
                                 firstHp: '',
                                 firstAtk: '',
                                 group: group,
