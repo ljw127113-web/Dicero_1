@@ -494,7 +494,7 @@
                                 </div>
                             </div>
                             <button class="btn btn-primary" onclick="exportFiles()" style="margin-right: 10px;">导出章节文件</button>
-                            <button class="btn btn-secondary" onclick="exportMonsterGroup()">导出怪物组（带版本号）</button>
+                            <button class="btn btn-secondary" onclick="exportMonsterGroup()">导出怪物组（带时间戳）</button>
                             <div id="exportResult" style="margin-top: 15px; padding: 10px; background: white; border-radius: 5px; display: none;"></div>
                         </div>
                     </div>
@@ -2699,7 +2699,7 @@
             resultDiv.style.display = 'block';
         }
 
-        // 导出怪物组（带版本号）
+        // 导出怪物组（带时间戳）
         function exportMonsterGroup() {
             if (!processedWorkbook) {
                 alert('请先处理数据（步骤2）');
@@ -2728,7 +2728,15 @@
             const newSheet = XLSX.utils.aoa_to_sheet(jsonData);
             XLSX.utils.book_append_sheet(newWorkbook, newSheet, monsterGroupSheetName);
             
-            const fileName = `怪物组_v${VERSION}.xlsx`;
+            // 生成当前时间戳（格式：YYYYMMDDHHmmss）
+            const now = new Date();
+            const timestamp = now.getFullYear().toString() +
+                            String(now.getMonth() + 1).padStart(2, '0') +
+                            String(now.getDate()).padStart(2, '0') +
+                            String(now.getHours()).padStart(2, '0') +
+                            String(now.getMinutes()).padStart(2, '0') +
+                            String(now.getSeconds()).padStart(2, '0');
+            const fileName = `怪物组_${timestamp}.xlsx`;
             XLSX.writeFile(newWorkbook, fileName, { bookType: 'xlsx' });
             
             const resultDiv = document.getElementById('exportResult');
