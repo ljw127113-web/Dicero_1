@@ -1,0 +1,2936 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>章节表格生成器</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Microsoft YaHei', 'Segoe UI', Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            opacity: 0.9;
+            font-size: 1.1em;
+        }
+
+        .upload-section {
+            padding: 20px 30px;
+            background: #f8f9fa;
+            border-bottom: 2px solid #e9ecef;
+        }
+
+        .upload-area {
+            border: 3px dashed #667eea;
+            border-radius: 10px;
+            padding: 25px 30px;
+            text-align: center;
+            background: white;
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+
+        .upload-area:hover {
+            border-color: #764ba2;
+            background: #f0f0ff;
+        }
+
+        .upload-area.dragover {
+            border-color: #764ba2;
+            background: #e8e8ff;
+            transform: scale(1.02);
+        }
+
+        .upload-icon {
+            font-size: 2.5em;
+            color: #667eea;
+            margin-bottom: 10px;
+        }
+
+        .file-input {
+            display: none;
+        }
+
+        .upload-btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 10px 25px;
+            border-radius: 25px;
+            font-size: 1em;
+            cursor: pointer;
+            transition: transform 0.2s;
+            margin-top: 10px;
+        }
+
+        .upload-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        .file-info {
+            margin-top: 20px;
+            padding: 15px;
+            background: #e7f3ff;
+            border-radius: 8px;
+            display: none;
+        }
+
+        .file-info.show {
+            display: block;
+        }
+
+        .file-info strong {
+            color: #667eea;
+        }
+
+        .controls {
+            padding: 20px 30px;
+            background: white;
+            border-bottom: 2px solid #e9ecef;
+            display: none;
+        }
+
+        .controls.show {
+            display: block;
+        }
+
+        .sheet-tabs {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-bottom: 20px;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            border: 2px solid #e9ecef;
+        }
+
+        .sheet-tab {
+            padding: 10px 20px;
+            background: #f0f0f0;
+            border: 2px solid transparent;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-weight: 500;
+        }
+
+        .sheet-tab:hover {
+            background: #e0e0e0;
+        }
+
+        .sheet-tab.active {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-color: #667eea;
+        }
+
+        .action-buttons {
+            display: flex;
+            gap: 15px;
+            margin-top: 20px;
+        }
+
+        .btn {
+            padding: 12px 25px;
+            border: none;
+            border-radius: 8px;
+            font-size: 1em;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-weight: 500;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-secondary {
+            background: #6c757d;
+            color: white;
+        }
+
+        .btn-secondary:hover {
+            background: #5a6268;
+        }
+
+        .display-section {
+            padding: 30px;
+            background: white;
+            display: none;
+        }
+
+        .display-section.show {
+            display: block;
+        }
+
+        .table-wrapper {
+            overflow: auto;
+            max-height: 600px;
+            border: 2px solid #e9ecef;
+            border-radius: 8px;
+            margin-top: 20px;
+        }
+
+        .excel-table {
+            border-collapse: collapse;
+            width: 100%;
+            min-width: 100%;
+            font-size: 0.9em;
+        }
+
+        .excel-table th,
+        .excel-table td {
+            border: 1px solid #dee2e6;
+            padding: 8px;
+            text-align: left;
+            white-space: nowrap;
+        }
+
+        .excel-table th {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+            font-weight: 600;
+        }
+
+        .excel-table th:first-child {
+            position: sticky;
+            left: 0;
+            z-index: 11;
+            background: linear-gradient(135deg, #5568d3 0%, #653a92 100%);
+        }
+
+        .excel-table td:first-child {
+            position: sticky;
+            left: 0;
+            background: #f8f9fa;
+            font-weight: 600;
+            z-index: 9;
+            text-align: center;
+        }
+
+        .excel-table tbody tr:nth-child(even) {
+            background: #f8f9fa;
+        }
+
+        .excel-table tbody tr:hover {
+            background: #e7f3ff;
+        }
+
+        .row-header {
+            background: #6c757d !important;
+            color: white !important;
+            min-width: 50px;
+            text-align: center !important;
+        }
+
+        .empty-cell {
+            background: #e9ecef;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #667eea;
+            font-size: 1.2em;
+        }
+
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #667eea;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .config-section {
+            border: 2px solid #e9ecef;
+        }
+
+        .config-section label {
+            color: #495057;
+        }
+
+        .config-section input,
+        .config-section select {
+            font-size: 1em;
+        }
+
+        #chapterIdsList {
+            border: 1px solid #dee2e6;
+        }
+
+        #chapterIdsDisplay {
+            margin-left: 10px;
+            color: #667eea;
+            font-weight: 600;
+        }
+
+        .step-section {
+            margin: 20px 0;
+        }
+
+        .step-tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            border-bottom: 2px solid #e9ecef;
+        }
+
+        .step-tab {
+            padding: 12px 25px;
+            background: #f0f0f0;
+            border: none;
+            border-bottom: 3px solid transparent;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-weight: 500;
+            font-size: 1em;
+        }
+
+        .step-tab:hover {
+            background: #e0e0e0;
+        }
+
+        .step-tab.active {
+            background: white;
+            border-bottom-color: #667eea;
+            color: #667eea;
+        }
+
+        .step-content {
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 8px;
+        }
+
+        .step-panel h3 {
+            color: #667eea;
+            margin-bottom: 20px;
+        }
+
+        .step-panel h4 {
+            color: #495057;
+            margin-bottom: 15px;
+        }
+
+        .config-table-wrapper {
+            margin-top: 20px;
+            max-height: 500px;
+            overflow: auto;
+        }
+
+        .btn-danger {
+            background: #dc3545;
+            color: white;
+        }
+
+        .btn-danger:hover {
+            background: #c82333;
+        }
+
+        .btn-small {
+            padding: 6px 12px;
+            font-size: 0.9em;
+        }
+
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📊 章节表格生成器</h1>
+            <p>上传Excel文件，查看和生成新的表格</p>
+            <p style="margin-top: 10px; font-size: 0.9em; opacity: 0.8;">版本号: <span id="versionNumber">1.0.21</span></p>
+        </div>
+
+        <div class="upload-section">
+            <div class="upload-area" id="uploadArea">
+                <div class="upload-icon">📁</div>
+                <h2 style="font-size: 1.3em; margin: 8px 0;">拖拽文件到此处或点击上传</h2>
+                <p style="margin-top: 5px; color: #666; font-size: 0.9em;">支持 .xlsx, .xlsm, .xls 格式</p>
+                <input type="file" id="fileInput" class="file-input" accept=".xlsx,.xlsm,.xls">
+                <button class="upload-btn" type="button" id="uploadBtn">选择文件</button>
+            </div>
+            <div class="file-info" id="fileInfo"></div>
+        </div>
+
+        <div class="controls" id="controls" style="display: none;">
+            <div class="sheet-tabs" id="sheetTabs"></div>
+        </div>
+
+        <div class="display-section" id="displaySection">
+            <div class="loading" id="loading">
+                <div class="spinner"></div>
+                <p>正在加载文件...</p>
+            </div>
+            <div id="tableContainer" style="display: none;"></div>
+        </div>
+
+        <div class="controls" id="stepControls" style="display: none;">
+            <div class="step-section" id="stepSection">
+                <div class="step-tabs">
+                    <div class="step-tab active" data-step="1">步骤1: 源文件显示</div>
+                    <div class="step-tab" data-step="2">步骤2: 数据处理</div>
+                    <div class="step-tab" data-step="3">步骤3: 导出文件</div>
+                </div>
+                <div class="step-content" id="stepContent">
+                    <!-- 步骤1内容：源文件显示 -->
+                    <div class="step-panel" id="step1Panel">
+                        <h3>源文件显示</h3>
+                        <div style="padding: 20px; background: #f8f9fa; border-radius: 8px; margin-bottom: 20px;">
+                            <p style="margin-bottom: 15px; color: #495057;">上方显示了源文件的所有sheet页标签，点击标签可以切换查看不同的sheet页。</p>
+                            <p style="margin-bottom: 15px; color: #495057;">表格中显示了行号（第一列）和列号（表头），方便查看数据位置。</p>
+                            <div style="background: white; padding: 15px; border-radius: 5px; border-left: 4px solid #667eea;">
+                                <strong style="color: #667eea;">提示：</strong>
+                                <ul style="margin-top: 10px; padding-left: 20px; color: #6c757d;">
+                                    <li>点击上方的sheet标签可以切换不同的sheet页</li>
+                                    <li>表格第一列显示行号（1, 2, 3...）</li>
+                                    <li>表格表头显示列号（A, B, C...）</li>
+                                    <li>表格支持横向和纵向滚动</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- 步骤2内容：数据处理 -->
+                    <div class="step-panel" id="step2Panel" style="display: none;">
+                        <h3>数据处理</h3>
+                        <div style="padding: 20px; background: #f8f9fa; border-radius: 8px; margin-bottom: 20px;">
+                            <p style="margin-bottom: 15px;">将根据"关卡规划总"sheet页的数据生成"怪物组"sheet页的"敌人组ID"列数据</p>
+                            <div style="margin-bottom: 15px;">
+                                <label style="display: block; margin-bottom: 5px; font-weight: 500;">生成选项:</label>
+                                <div style="margin-bottom: 10px;">
+                                    <label style="display: flex; align-items: center; cursor: pointer;">
+                                        <input type="radio" name="processOption" value="all" checked style="margin-right: 8px;">
+                                        <span>全部生成</span>
+                                    </label>
+                                    <label style="display: flex; align-items: center; cursor: pointer; margin-top: 8px;">
+                                        <input type="radio" name="processOption" value="single" style="margin-right: 8px;">
+                                        <span>分章节生成</span>
+                                    </label>
+                                </div>
+                                <div id="singleChapterProcessInput" style="display: none; margin-top: 10px;">
+                                    <label style="display: block; margin-bottom: 5px; font-weight: 500;">章节ID:</label>
+                                    <input type="number" id="singleChapterProcessId" placeholder="请输入章节ID" min="1" style="width: 100%; padding: 8px; border: 2px solid #ddd; border-radius: 5px;">
+                                </div>
+                            </div>
+                            <button class="btn btn-primary" onclick="processData()">处理数据</button>
+                            <div id="processResult" style="margin-top: 15px; padding: 10px; background: white; border-radius: 5px; display: none;"></div>
+                        </div>
+                        <div id="processedDataDisplay" style="display: none;">
+                            <h4 style="margin-bottom: 10px;">处理后的数据预览</h4>
+                            <div id="processedSheetTabs" class="sheet-tabs"></div>
+                            <div id="processedTableContainer"></div>
+                        </div>
+                    </div>
+                    <!-- 步骤3内容：导出文件 -->
+                    <div class="step-panel" id="step3Panel" style="display: none;">
+                        <h3>导出文件</h3>
+                        <div style="padding: 20px; background: #f8f9fa; border-radius: 8px;">
+                            <p style="margin-bottom: 15px;">按章节导出处理后的数据为新的xlsx文件</p>
+                            <div style="margin-bottom: 15px;">
+                                <label style="display: block; margin-bottom: 5px; font-weight: 500;">导出选项:</label>
+                                <div style="margin-bottom: 10px;">
+                                    <label style="display: flex; align-items: center; cursor: pointer;">
+                                        <input type="radio" name="exportOption" value="all" checked style="margin-right: 8px;">
+                                        <span>导出全部章节</span>
+                                    </label>
+                                    <label style="display: flex; align-items: center; cursor: pointer; margin-top: 8px;">
+                                        <input type="radio" name="exportOption" value="single" style="margin-right: 8px;">
+                                        <span>导出单个章节</span>
+                                    </label>
+                                </div>
+                                <div id="singleChapterInput" style="display: none; margin-top: 10px;">
+                                    <label style="display: block; margin-bottom: 5px; font-weight: 500;">章节ID:</label>
+                                    <input type="number" id="singleChapterId" placeholder="请输入章节ID" min="1" style="width: 100%; padding: 8px; border: 2px solid #ddd; border-radius: 5px;">
+                                </div>
+                            </div>
+                            <button class="btn btn-primary" onclick="exportFiles()" style="margin-right: 10px;">导出章节文件</button>
+                            <button class="btn btn-secondary" onclick="exportMonsterGroup()">导出怪物组（带版本号）</button>
+                            <div id="exportResult" style="margin-top: 15px; padding: 10px; background: white; border-radius: 5px; display: none;"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="action-buttons">
+                <button class="btn btn-secondary" onclick="clearFile()">清除文件</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 版本号配置 - 每次代码修改时，将最后一个点后面的数字+1（最大9999，中间位保持为0由用户手动提升）
+        const VERSION = '1.0.21';
+        
+        // 显示版本号
+        document.addEventListener('DOMContentLoaded', () => {
+            const versionElement = document.getElementById('versionNumber');
+            if (versionElement) {
+                versionElement.textContent = VERSION;
+            }
+            
+            // 添加导出选项切换事件
+            const exportOptions = document.querySelectorAll('input[name="exportOption"]');
+            const singleChapterInput = document.getElementById('singleChapterInput');
+            if (exportOptions.length > 0 && singleChapterInput) {
+                exportOptions.forEach(option => {
+                    option.addEventListener('change', (e) => {
+                        if (e.target.value === 'single') {
+                            singleChapterInput.style.display = 'block';
+                        } else {
+                            singleChapterInput.style.display = 'none';
+                        }
+                    });
+                });
+            }
+            
+            // 添加处理数据选项切换事件
+            const processOptions = document.querySelectorAll('input[name="processOption"]');
+            const singleChapterProcessInput = document.getElementById('singleChapterProcessInput');
+            if (processOptions.length > 0 && singleChapterProcessInput) {
+                processOptions.forEach(option => {
+                    option.addEventListener('change', (e) => {
+                        if (e.target.value === 'single') {
+                            singleChapterProcessInput.style.display = 'block';
+                        } else {
+                            singleChapterProcessInput.style.display = 'none';
+                        }
+                    });
+                });
+            }
+        });
+
+        let workbook = null;
+        let currentSheetName = null;
+        let workbookData = null;
+        let globalGeneratedData = null; // 存储生成的怪物组数据，供导出使用
+        let globalPlanData = null; // 存储"关卡规划总"的原始数据，供导出使用
+
+        // 文件上传区域事件
+        const uploadArea = document.getElementById('uploadArea');
+        const fileInput = document.getElementById('fileInput');
+        const uploadBtn = document.getElementById('uploadBtn');
+        const fileInfo = document.getElementById('fileInfo');
+        const controls = document.getElementById('controls');
+        const stepControls = document.getElementById('stepControls');
+        const displaySection = document.getElementById('displaySection');
+        const sheetTabs = document.getElementById('sheetTabs');
+        const tableContainer = document.getElementById('tableContainer');
+        const loading = document.getElementById('loading');
+
+        // 点击上传区域（但排除按钮）
+        uploadArea.addEventListener('click', (e) => {
+            // 如果点击的是按钮或其子元素，不处理
+            if (e.target === uploadBtn || uploadBtn.contains(e.target)) {
+                return;
+            }
+            fileInput.click();
+        });
+
+        // 点击选择文件按钮
+        uploadBtn.addEventListener('click', (e) => {
+            e.stopPropagation(); // 阻止事件冒泡到uploadArea
+            fileInput.click();
+        });
+
+        // 文件选择
+        fileInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                handleFile(file);
+            }
+        });
+
+        // 拖拽上传
+        uploadArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadArea.classList.add('dragover');
+        });
+
+        uploadArea.addEventListener('dragleave', () => {
+            uploadArea.classList.remove('dragover');
+        });
+
+        uploadArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadArea.classList.remove('dragover');
+            const file = e.dataTransfer.files[0];
+            if (file && (file.name.endsWith('.xlsx') || file.name.endsWith('.xlsm') || file.name.endsWith('.xls'))) {
+                handleFile(file);
+            } else {
+                alert('请上传有效的Excel文件（.xlsx, .xlsm, .xls）');
+            }
+        });
+
+        // 处理文件
+        function handleFile(file) {
+            loading.style.display = 'block';
+            tableContainer.style.display = 'none';
+            displaySection.classList.add('show');
+
+            fileInfo.innerHTML = `<strong>已选择文件：</strong> ${file.name} (${(file.size / 1024).toFixed(2)} KB)`;
+            fileInfo.classList.add('show');
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const data = new Uint8Array(e.target.result);
+                    workbook = XLSX.read(data, { type: 'array', cellStyles: true });
+                    workbookData = workbook;
+                    
+                    displayWorkbook(workbook);
+                } catch (error) {
+                    console.error('读取文件错误:', error);
+                    alert('文件读取失败，请确保文件格式正确');
+                    loading.style.display = 'none';
+                }
+            };
+            reader.readAsArrayBuffer(file);
+        }
+
+        // 显示工作簿 - 第一部分：源文件显示
+        function displayWorkbook(wb) {
+            const sheetNames = wb.SheetNames;
+            
+            if (!sheetTabs) {
+                console.error('sheetTabs元素未找到');
+                alert('错误：无法找到sheet标签容器');
+                return;
+            }
+            
+            if (sheetNames.length === 0) {
+                console.warn('没有找到sheet页');
+                alert('错误：文件中没有找到sheet页');
+                return;
+            }
+            
+            // 创建sheet标签
+            sheetTabs.innerHTML = '';
+            sheetNames.forEach((name, index) => {
+                const tab = document.createElement('div');
+                tab.className = 'sheet-tab' + (index === 0 ? ' active' : '');
+                tab.textContent = name;
+                tab.onclick = () => switchSheet(name);
+                sheetTabs.appendChild(tab);
+            });
+
+            // 显示controls区域（sheetTabs区域，贴近表格）
+            controls.classList.add('show');
+            controls.style.display = 'block'; // 确保显示
+            
+            // 显示步骤控制区域（放在最下面）
+            if (stepControls) {
+                stepControls.classList.add('show');
+                stepControls.style.display = 'block';
+            }
+            
+            // 确保sheetTabs可见
+            sheetTabs.style.display = 'flex';
+            sheetTabs.style.visibility = 'visible';
+            
+            console.log('已创建', sheetNames.length, '个sheet标签');
+            console.log('sheetTabs元素:', sheetTabs);
+            console.log('controls是否显示:', controls.classList.contains('show'));
+            
+            // 初始化步骤切换
+            initStepTabs();
+            
+            // 显示第一个sheet
+            if (sheetNames.length > 0) {
+                currentSheetName = sheetNames[0];
+                displaySheet(wb.Sheets[currentSheetName], currentSheetName);
+            }
+
+            loading.style.display = 'none';
+        }
+
+        // 初始化步骤标签
+        function initStepTabs() {
+            const stepTabs = document.querySelectorAll('.step-tab');
+            stepTabs.forEach(tab => {
+                tab.addEventListener('click', () => {
+                    const step = tab.getAttribute('data-step');
+                    switchStep(step);
+                });
+            });
+            // 默认显示步骤1
+            switchStep('1');
+        }
+
+        // 切换步骤
+        function switchStep(step) {
+            // 更新标签状态
+            document.querySelectorAll('.step-tab').forEach(tab => {
+                if (tab.getAttribute('data-step') === step) {
+                    tab.classList.add('active');
+                } else {
+                    tab.classList.remove('active');
+                }
+            });
+
+            // 显示对应的面板
+            document.getElementById('step1Panel').style.display = step === '1' ? 'block' : 'none';
+            document.getElementById('step2Panel').style.display = step === '2' ? 'block' : 'none';
+            document.getElementById('step3Panel').style.display = step === '3' ? 'block' : 'none';
+            
+            // 确保源文件显示区域在步骤1时显示
+            if (step === '1' && workbook && displaySection) {
+                displaySection.classList.add('show');
+            }
+        }
+
+        // 切换sheet
+        function switchSheet(sheetName) {
+            currentSheetName = sheetName;
+            
+            // 更新标签状态
+            document.querySelectorAll('.sheet-tab').forEach((tab, index) => {
+                if (workbook.SheetNames[index] === sheetName) {
+                    tab.classList.add('active');
+                } else {
+                    tab.classList.remove('active');
+                }
+            });
+
+            displaySheet(workbook.Sheets[sheetName], sheetName);
+        }
+
+        // Excel列号转换（1->A, 2->B, ..., 27->AA, ...）
+        function getExcelColumnName(colIndex) {
+            let result = '';
+            while (colIndex >= 0) {
+                result = String.fromCharCode(65 + (colIndex % 26)) + result;
+                colIndex = Math.floor(colIndex / 26) - 1;
+            }
+            return result;
+        }
+
+        // 显示sheet数据
+        function displaySheet(sheet, sheetName) {
+            loading.style.display = 'block';
+            tableContainer.style.display = 'none';
+
+            setTimeout(() => {
+                const range = XLSX.utils.decode_range(sheet['!ref'] || 'A1');
+                
+                // 创建表格
+                let html = '<div class="table-wrapper"><table class="excel-table"><thead><tr>';
+                
+                // 表头：空单元格 + 列号（A, B, C...）
+                html += '<th class="row-header">行/列</th>';
+                for (let C = range.s.c; C <= range.e.c; C++) {
+                    const colName = getExcelColumnName(C);
+                    html += `<th>${colName}</th>`;
+                }
+                html += '</tr></thead><tbody>';
+
+                // 数据行
+                for (let R = range.s.r; R <= range.e.r; R++) {
+                    html += '<tr>';
+                    // 行号
+                    html += `<td class="row-header">${R + 1}</td>`;
+                    
+                    // 数据单元格
+                    for (let C = range.s.c; C <= range.e.c; C++) {
+                        const cellAddress = XLSX.utils.encode_cell({ r: R, c: C });
+                        const cell = sheet[cellAddress];
+                        const cellValue = cell ? (cell.w || cell.v || '') : '';
+                        const displayValue = cellValue === '' ? '&nbsp;' : escapeHtml(String(cellValue));
+                        html += `<td>${displayValue}</td>`;
+                    }
+                    html += '</tr>';
+                }
+
+                html += '</tbody></table></div>';
+                
+                tableContainer.innerHTML = html;
+                loading.style.display = 'none';
+                tableContainer.style.display = 'block';
+            }, 100);
+        }
+
+        // HTML转义
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        // 自动检测章节ID列
+        function detectChapterIdColumn() {
+            if (!workbookData) return;
+            
+            // 尝试找到"章节总"相关的sheet页
+            let targetSheet = null;
+            let targetSheetName = null;
+            
+            for (let sheetName of workbookData.SheetNames) {
+                if (sheetName.includes('章节总') || sheetName.includes('总表')) {
+                    targetSheet = workbookData.Sheets[sheetName];
+                    targetSheetName = sheetName;
+                    break;
+                }
+            }
+            
+            if (!targetSheet && workbookData.SheetNames.length > 0) {
+                targetSheet = workbookData.Sheets[workbookData.SheetNames[0]];
+                targetSheetName = workbookData.SheetNames[0];
+            }
+            
+            if (!targetSheet) return;
+            
+            // 读取sheet数据
+            const data = XLSX.utils.sheet_to_json(targetSheet, { header: 1, defval: '' });
+            
+            // 尝试查找包含"章节"、"id"、"章节ID"等关键词的列
+            if (data.length > 0) {
+                const firstRow = data[0];
+                for (let i = 0; i < firstRow.length; i++) {
+                    const header = String(firstRow[i]).toLowerCase();
+                    if (header.includes('章节') && (header.includes('id') || header.includes('编号'))) {
+                        const colName = XLSX.utils.encode_col(i);
+                        document.getElementById('chapterIdCol').value = colName;
+                        extractChapterIds(targetSheet, colName);
+                        return;
+                    }
+                }
+                
+                // 如果第一行没找到，尝试查找包含数字的列
+                for (let col = 0; col < data[0].length; col++) {
+                    let hasNumericIds = false;
+                    for (let row = 1; row < Math.min(10, data.length); row++) {
+                        const val = data[row][col];
+                        if (val !== '' && val !== null && val !== undefined) {
+                            const numVal = Number(val);
+                            if (!isNaN(numVal) && numVal > 0 && numVal % 1 === 0) {
+                                hasNumericIds = true;
+                                break;
+                            }
+                        }
+                    }
+                    if (hasNumericIds) {
+                        const colName = XLSX.utils.encode_col(col);
+                        document.getElementById('chapterIdCol').value = colName;
+                        extractChapterIds(targetSheet, colName);
+                        return;
+                    }
+                }
+            }
+        }
+
+        // 提取章节ID
+        function extractChapterIds(sheet, colName) {
+            if (!colName) {
+                colName = document.getElementById('chapterIdCol').value;
+            }
+            
+            if (!colName || !sheet) return;
+            
+            const data = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
+            const colIndex = XLSX.utils.decode_col(colName);
+            
+            const chapterIds = new Set();
+            for (let row = 1; row < data.length; row++) {
+                const val = data[row][colIndex];
+                if (val !== '' && val !== null && val !== undefined) {
+                    const numVal = Number(val);
+                    if (!isNaN(numVal) && numVal > 0 && numVal % 1 === 0) {
+                        chapterIds.add(numVal);
+                    }
+                }
+            }
+            
+            const sortedIds = Array.from(chapterIds).sort((a, b) => a - b);
+            document.getElementById('chapterIdsDisplay').textContent = sortedIds.join(', ');
+            document.getElementById('chapterIdsList').style.display = sortedIds.length > 0 ? 'block' : 'none';
+            
+            return sortedIds;
+        }
+
+        // 创建stage_id sheet页
+        function createStageSheet(chapterId, stageData) {
+            const sheet = XLSX.utils.aoa_to_sheet([]);
+            
+            // 设置前5行的固定值
+            // 根据需求：
+            // A列前5行: "##var","##var","##type","##group","##"
+            // B列前5行: "id","","int","c,s","层ID"
+            // C列前5行: "chapter","","int","c,s","章节ID"
+            // D列前5行: "stage","","int","c,s","层ID"
+            // E列前5行: "stageType","","int","c,s","层类型"
+            // F列前5行: "bossAnim","","(array#sep=*),float","c,s","BOSS虚影"
+            // G列前5行: "stageExp","","int","c,s","过关经验值"
+            
+            const headerData = [
+                ['##var', '##var', '##var', '##var', '##var', '##var', '##var'], // 第1行
+                ['##var', 'id', 'chapter', 'stage', 'stageType', 'bossAnim', 'stageExp'], // 第2行
+                ['##type', 'int', 'int', 'int', 'int', '(array#sep=*),float', 'int'], // 第3行
+                ['##group', 'c,s', 'c,s', 'c,s', 'c,s', 'c,s', 'c,s'], // 第4行
+                ['##', '层ID', '章节ID', '层ID', '层类型', 'BOSS虚影', '过关经验值'] // 第5行
+            ];
+            
+            // 写入表头（前5行）
+            for (let row = 0; row < 5; row++) {
+                for (let col = 0; col < 7; col++) {
+                    const cellAddress = XLSX.utils.encode_cell({ r: row, c: col });
+                    const value = headerData[row][col] || '';
+                    sheet[cellAddress] = { v: value, t: 's' };
+                }
+            }
+            
+            // 从stageData填充数据（从第6行开始，索引5）
+            // 根据需求：B列读取"关卡规划总"sheet页中A列所有为该id的B列值
+            // 这里将B列值填入B列（从第6行开始）
+            if (stageData && stageData.length > 0) {
+                stageData.forEach((item, index) => {
+                    const row = 5 + index; // 从第6行开始（索引5）
+                    
+                    // B列（索引1）填入从关卡规划总读取的B列值
+                    const bValue = item.bValue || item;
+                    const cellAddressB = XLSX.utils.encode_cell({ r: row, c: 1 }); // B列
+                    sheet[cellAddressB] = { 
+                        v: typeof bValue === 'object' ? bValue.bValue : bValue, 
+                        t: typeof bValue === 'number' ? 'n' : 's' 
+                    };
+                    
+                    // C列（索引2）填入章节ID
+                    const cellAddressC = XLSX.utils.encode_cell({ r: row, c: 2 }); // C列
+                    sheet[cellAddressC] = { v: chapterId, t: 'n' };
+                });
+            }
+            
+            // 设置范围
+            const maxRow = Math.max(4, 5 + (stageData ? stageData.length - 1 : 0));
+            sheet['!ref'] = XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: maxRow, c: 6 } });
+            
+            return sheet;
+        }
+
+        // 创建stageEvent_id sheet页
+        function createStageEventSheet(chapterId) {
+            const sheet = XLSX.utils.aoa_to_sheet([]);
+            
+            const headerData = [
+                ['##var', '##var', '##var', '##var'],
+                ['##var', 'id', 'eventId', 'eventFirst'],
+                ['##type', 'int', '(array#sep=|),(array#sep=*),int', 'int'],
+                ['##group', 'c,s', 'c,s', 'c,s'],
+                ['##', '层ID', '事件随机', '首次事件']
+            ];
+            
+            for (let row = 0; row < 5; row++) {
+                for (let col = 0; col < 4; col++) {
+                    const cellAddress = XLSX.utils.encode_cell({ r: row, c: col });
+                    sheet[cellAddress] = { v: headerData[row][col], t: 's' };
+                }
+            }
+            
+            sheet['!ref'] = XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: 4, c: 3 } });
+            return sheet;
+        }
+
+        // 创建stageBattle_id sheet页
+        function createStageBattleSheet(chapterId) {
+            const sheet = XLSX.utils.aoa_to_sheet([]);
+            
+            const headerData = [
+                ['##var', '##var', '##var', '##var', '##var', '##var', '##var', '##var', '##var', '##var', '##var', '##var', '##var', '##var'],
+                ['##var', 'id', 'hp', 'atk', 'firstHp', 'firstAtk', 'group', 'rogue', 'point', 'roll', 'diceHand', 'prop', 'enemyExp', 'stageExp'],
+                ['##type', 'int', 'int', 'int', 'int', 'int', '(array#sep=*),int', '(array#sep=*),int', '(array#sep=|),(array#sep=*),int', '(array#sep=|),(array#sep=*),int', '(array#sep=*),int', '(array#sep=|),(array#sep=*),int', 'int', 'int'],
+                ['##group', 'c,s', 'c,s', 'c,s', 'c,s', 'c,s', 'c,s', 'c,s', 'c,s', 'c,s', 'c,s', 'c,s', 'c,s', 'c,s'],
+                ['##', '层ID', '标准血量', '标准攻击力', '第一次血量', '第一次攻击力', '随机敌人组', '结束是否有rogue', '第一次到达必出点数', '第几次重置出某个点数', '牌型概率', '道具掉落', '单怪掉落经验值', '过关经验值']
+            ];
+            
+            for (let row = 0; row < 5; row++) {
+                for (let col = 0; col < 14; col++) {
+                    const cellAddress = XLSX.utils.encode_cell({ r: row, c: col });
+                    sheet[cellAddress] = { v: headerData[row][col], t: 's' };
+                }
+            }
+            
+            sheet['!ref'] = XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: 4, c: 13 } });
+            return sheet;
+        }
+
+        // 创建group_id sheet页
+        function createGroupSheet(chapterId) {
+            const sheet = XLSX.utils.aoa_to_sheet([]);
+            
+            const headerData = [
+                ['##var', '##var', '##var', '##var', '##var', '##var', '##var', '##var', '##var', '##var'],
+                ['##var', 'id', 'groupId', 'enemy', 'position', 'start', 'passiveSkill', 'hpTimes', 'atkTimes', 'skillOrder'],
+                ['##type', 'int', 'int', 'temp.EEnemy', 'int', '(array#sep=*),int', '(array#sep=*),int', '(array#sep=*),float', '(array#sep=*),float', '(array#sep=*),temp.EEnemyBehavior'],
+                ['##group', 'c,s', 'c,s', 'c,s', 'c,s', 'c,s', 'c,s', 'c,s', 'c,s', 'c,s'],
+                ['##', '唯一ID', '敌人组ID', '敌人ID', '站位', '怪物初始状态', '常驻被动技能', '标准血量倍率范围', '标准攻击力倍率范围', '技能顺序']
+            ];
+            
+            for (let row = 0; row < 5; row++) {
+                for (let col = 0; col < 10; col++) {
+                    const cellAddress = XLSX.utils.encode_cell({ r: row, c: col });
+                    sheet[cellAddress] = { v: headerData[row][col], t: 's' };
+                }
+            }
+            
+            sheet['!ref'] = XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: 4, c: 9 } });
+            return sheet;
+        }
+
+        // 从关卡规划总读取数据
+        function getStageDataFromPlanSheet(chapterId) {
+            const stagePlanSheetName = document.getElementById('stagePlanSheet').value;
+            let planSheet = null;
+            
+            // 如果指定了sheet页名，使用指定的；否则自动查找
+            if (stagePlanSheetName) {
+                planSheet = workbookData.Sheets[stagePlanSheetName];
+            } else {
+                // 自动查找包含"关卡规划总"的sheet页
+                for (let name of workbookData.SheetNames) {
+                    if (name.includes('关卡规划总') || name.includes('规划总')) {
+                        planSheet = workbookData.Sheets[name];
+                        break;
+                    }
+                }
+            }
+            
+            if (!planSheet) {
+                console.warn('未找到关卡规划总sheet页');
+                return [];
+            }
+            
+            const data = XLSX.utils.sheet_to_json(planSheet, { header: 1, defval: '' });
+            
+            // A列（索引0）是章节ID列
+            // B列（索引1）是要读取的值
+            const chapterIdCol = 0; // A列
+            const valueCol = 1; // B列
+            
+            const stageData = [];
+            
+            // 遍历所有行，找到A列等于该章节ID的行，读取B列的值
+            for (let row = 0; row < data.length; row++) {
+                const rowChapterId = data[row][chapterIdCol];
+                if (rowChapterId !== '' && rowChapterId !== null && rowChapterId !== undefined) {
+                    const numId = Number(rowChapterId);
+                    // 检查是否匹配章节ID
+                    if (!isNaN(numId) && numId === chapterId) {
+                        const bValue = data[row][valueCol];
+                        if (bValue !== '' && bValue !== null && bValue !== undefined) {
+                            // 将B列的值作为数据，这里需要根据实际需求调整数据结构
+                            // 根据需求，B列值应该填入stage sheet的某个位置
+                            // 目前先保存B列的值，后续可以根据需要调整
+                            stageData.push({
+                                chapterId: chapterId,
+                                bValue: bValue,
+                                rowIndex: row
+                            });
+                        }
+                    }
+                }
+            }
+            
+            return stageData;
+        }
+
+        let processedWorkbook = null; // 存储处理后的工作簿
+
+        // 第二部分：数据处理 - 根据规则生成怪物组数据
+        function processData() {
+            if (!workbookData) {
+                alert('请先上传文件');
+                return;
+            }
+
+            // 找到"关卡规划总"sheet页
+            let planSheet = null;
+            let planSheetName = null;
+            for (let sheetName of workbookData.SheetNames) {
+                if (sheetName.includes('关卡规划总') || sheetName.includes('规划总')) {
+                    planSheet = workbookData.Sheets[sheetName];
+                    planSheetName = sheetName;
+                    break;
+                }
+            }
+
+            if (!planSheet) {
+                alert('未找到"关卡规划总"sheet页');
+                return;
+            }
+
+            // 找到"怪物组"sheet页
+            let monsterGroupSheet = null;
+            let monsterGroupSheetName = null;
+            for (let sheetName of workbookData.SheetNames) {
+                if (sheetName.includes('怪物组')) {
+                    monsterGroupSheet = workbookData.Sheets[sheetName];
+                    monsterGroupSheetName = sheetName;
+                    break;
+                }
+            }
+
+            if (!monsterGroupSheet) {
+                alert('未找到"怪物组"sheet页');
+                return;
+            }
+
+            // 读取"关卡规划总"数据
+            const planData = XLSX.utils.sheet_to_json(planSheet, { header: 1, defval: '' });
+            if (planData.length === 0) {
+                alert('"关卡规划总"sheet页为空');
+                return;
+            }
+            
+            // 保存原始数据供导出使用
+            globalPlanData = {
+                data: planData,
+                sheetName: planSheetName,
+                headerRow: planData.length > 0 ? planData[0] : []
+            };
+
+            // 查找列索引
+            const headerRow = planData[0];
+            let chapterColIndex = -1; // 章节列
+            let stageSeqColIndex = -1; // 小关序号列
+            let monsterCountColIndex = -1; // 怪物数量列
+            let stageTypeColIndex = -1; // 关卡类型列
+            let bossEliteColIndex = -1; // boss和精英列
+
+            for (let i = 0; i < headerRow.length; i++) {
+                const header = String(headerRow[i]).trim();
+                if (header.includes('章节') || header === '章节') {
+                    chapterColIndex = i;
+                }
+                if (header.includes('小关序号') || header === '小关序号' || header.includes('序号')) {
+                    stageSeqColIndex = i;
+                }
+                if (header.includes('怪物数量') || header === '怪物数量' || header.includes('数量')) {
+                    monsterCountColIndex = i;
+                }
+                if (header.includes('关卡类型') || header === '关卡类型' || header.includes('类型')) {
+                    stageTypeColIndex = i;
+                }
+                if (header.includes('boss和精英') || header === 'boss和精英' || (header.includes('boss') && header.includes('精英'))) {
+                    bossEliteColIndex = i;
+                }
+            }
+
+            if (chapterColIndex === -1 || stageSeqColIndex === -1 || monsterCountColIndex === -1) {
+                alert('未找到必要的列：章节、小关序号、怪物数量');
+                console.log('章节列:', chapterColIndex, '小关序号列:', stageSeqColIndex, '怪物数量列:', monsterCountColIndex);
+                return;
+            }
+
+            // 读取"怪物组"数据
+            const monsterGroupData = XLSX.utils.sheet_to_json(monsterGroupSheet, { header: 1, defval: '' });
+            
+            // 查找"章节总"sheet页，建立章节ID与主题、怪物权重的映射关系
+            let chapterTotalSheet = null;
+            let chapterThemeMap = {}; // 章节ID到主题的映射
+            let chapterWeightMap = {}; // 章节ID到怪物权重的映射
+            for (let sheetName of workbookData.SheetNames) {
+                if (sheetName.includes('章节总') || sheetName.includes('总表')) {
+                    chapterTotalSheet = workbookData.Sheets[sheetName];
+                    break;
+                }
+            }
+            
+            if (chapterTotalSheet) {
+                const chapterTotalData = XLSX.utils.sheet_to_json(chapterTotalSheet, { header: 1, defval: '' });
+                if (chapterTotalData.length > 0) {
+                    const chapterTotalHeader = chapterTotalData[0];
+                    let chapterIdColInTotal = -1; // 章节总中的章节ID列
+                    let themeColInTotal = -1; // 章节总中的主题列
+                    let weightColInTotal = -1; // 章节总中的怪物权重列
+                    
+                    for (let i = 0; i < chapterTotalHeader.length; i++) {
+                        const header = String(chapterTotalHeader[i]).trim();
+                        const headerLower = header.toLowerCase();
+                        if ((header.includes('章节') && header.includes('ID')) || headerLower.includes('章节id') || header === '章节ID' || header === '章节id') {
+                            chapterIdColInTotal = i;
+                        }
+                        if (header.includes('主题') || header === '主题') {
+                            themeColInTotal = i;
+                        }
+                        if (header.includes('怪物权重') || header === '怪物权重' || header.includes('权重')) {
+                            weightColInTotal = i;
+                        }
+                    }
+                    
+                    // 如果找到了章节ID列和主题列，建立映射关系
+                    if (chapterIdColInTotal >= 0 && themeColInTotal >= 0) {
+                        for (let row = 1; row < chapterTotalData.length; row++) {
+                            const chapterId = chapterTotalData[row][chapterIdColInTotal];
+                            const theme = chapterTotalData[row][themeColInTotal];
+                            const weight = weightColInTotal >= 0 ? chapterTotalData[row][weightColInTotal] : '';
+                            if (chapterId !== '' && chapterId !== null && chapterId !== undefined) {
+                                const numChapterId = Number(chapterId);
+                                if (!isNaN(numChapterId)) {
+                                    chapterThemeMap[numChapterId] = theme || '';
+                                    chapterWeightMap[numChapterId] = weight || '';
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            
+            // 查找"怪物分布"sheet页
+            let monsterDistributionSheet = null;
+            let monsterDistributionData = [];
+            let monsterDistributionHeader = [];
+            let monsterIdColInDistribution = -1; // 怪物分布中的怪物ID列
+            let themeColInDistribution = -1; // 怪物分布中的主题列
+            let stageTypeColInDistribution = -1; // 怪物分布中的关卡类型列
+            let tagColInDistribution = -1; // 怪物分布中的标签列
+            
+            for (let sheetName of workbookData.SheetNames) {
+                if (sheetName.includes('怪物分布')) {
+                    monsterDistributionSheet = workbookData.Sheets[sheetName];
+                    break;
+                }
+            }
+            
+            if (monsterDistributionSheet) {
+                monsterDistributionData = XLSX.utils.sheet_to_json(monsterDistributionSheet, { header: 1, defval: '' });
+                if (monsterDistributionData.length > 0) {
+                    monsterDistributionHeader = monsterDistributionData[0];
+                    
+                    for (let i = 0; i < monsterDistributionHeader.length; i++) {
+                        const header = String(monsterDistributionHeader[i]).trim();
+                        const headerLower = header.toLowerCase();
+                        if ((header.includes('怪物') && header.includes('ID')) || headerLower.includes('怪物id') || header === '怪物ID' || header === '怪物id') {
+                            monsterIdColInDistribution = i;
+                        }
+                        if (header.includes('主题') || header === '主题') {
+                            themeColInDistribution = i;
+                        }
+                        if (header.includes('关卡类型') || header === '关卡类型') {
+                            stageTypeColInDistribution = i;
+                        }
+                        if (header.includes('标签') || header === '标签') {
+                            tagColInDistribution = i;
+                        }
+                    }
+                }
+            }
+            
+            // 查找"敌人站位"sheet页
+            let enemyPositionSheet = null;
+            let enemyPositionData = [];
+            let enemyPositionHeader = [];
+            let monsterCountColInPosition = -1; // 敌人站位中的怪物数量列
+            let positionIdColInPosition = -1; // 敌人站位中的站位id列
+            
+            for (let sheetName of workbookData.SheetNames) {
+                if (sheetName.includes('敌人站位') || sheetName.includes('站位')) {
+                    enemyPositionSheet = workbookData.Sheets[sheetName];
+                    break;
+                }
+            }
+            
+            if (enemyPositionSheet) {
+                enemyPositionData = XLSX.utils.sheet_to_json(enemyPositionSheet, { header: 1, defval: '' });
+                if (enemyPositionData.length > 0) {
+                    enemyPositionHeader = enemyPositionData[0];
+                    console.log('敌人站位表头:', enemyPositionHeader);
+                    
+                    for (let i = 0; i < enemyPositionHeader.length; i++) {
+                        const header = String(enemyPositionHeader[i]).trim();
+                        const headerLower = header.toLowerCase();
+                        if (header.includes('怪物数量') || header === '怪物数量' || header.includes('数量')) {
+                            monsterCountColInPosition = i;
+                        }
+                        if ((header.includes('站位') && header.includes('ID')) || headerLower.includes('站位id') || header === '站位ID' || header === '站位id') {
+                            positionIdColInPosition = i;
+                        }
+                    }
+                    console.log('敌人站位列索引:', {
+                        monsterCountCol: monsterCountColInPosition,
+                        positionIdCol: positionIdColInPosition
+                    });
+                }
+            } else {
+                console.log('未找到敌人站位sheet页');
+            }
+            
+            // 查找"怪物组"sheet页的列索引
+            const monsterHeaderRow = monsterGroupData.length > 0 ? monsterGroupData[0] : [];
+            let enemyGroupIdColIndex = -1; // 敌人组ID列
+            let uniqueIdColIndex = -1; // 唯一ID列
+            let chapterColInMonsterGroup = -1; // 章节列
+            let stageTypeColInMonsterGroup = -1; // 关卡类型列
+            let themeColInMonsterGroup = -1; // 主题列
+            let enemyIdColInMonsterGroup = -1; // 敌人ID列
+            let positionColInMonsterGroup = -1; // 站位列
+            let stageSeqColInMonsterGroup = -1; // 小关序号列
+            let hpTimesColInMonsterGroup = -1; // 标准血量倍率范围列
+            let atkTimesColInMonsterGroup = -1; // 标准攻击力倍率范围列
+            
+            for (let i = 0; i < monsterHeaderRow.length; i++) {
+                const header = String(monsterHeaderRow[i]).trim();
+                const headerLower = header.toLowerCase();
+                if (header.includes('敌人组ID') || header === '敌人组ID' || headerLower.includes('敌人组id')) {
+                    enemyGroupIdColIndex = i;
+                }
+                if (header.includes('唯一ID') || header === '唯一ID' || headerLower.includes('唯一id') || header === '唯一id') {
+                    uniqueIdColIndex = i;
+                }
+                if (header.includes('章节') && !header.includes('ID') && !headerLower.includes('id')) {
+                    chapterColInMonsterGroup = i;
+                }
+                if (header.includes('关卡类型') || header === '关卡类型') {
+                    stageTypeColInMonsterGroup = i;
+                }
+                if (header.includes('主题') || header === '主题') {
+                    themeColInMonsterGroup = i;
+                }
+                if ((header.includes('敌人') && header.includes('ID') && !header.includes('组')) || (headerLower.includes('敌人id') && !headerLower.includes('组')) || header === '敌人ID' || header === '敌人id') {
+                    enemyIdColInMonsterGroup = i;
+                }
+                if (header.includes('站位') && !header.includes('ID') && !headerLower.includes('id')) {
+                    positionColInMonsterGroup = i;
+                }
+                if (header.includes('小关序号') || header === '小关序号' || (header.includes('序号') && !header.includes('唯一'))) {
+                    stageSeqColInMonsterGroup = i;
+                }
+                if (header.includes('标准血量倍率范围') || header === '标准血量倍率范围' || header.includes('血量倍率')) {
+                    hpTimesColInMonsterGroup = i;
+                }
+                if (header.includes('标准攻击力倍率范围') || header === '标准攻击力倍率范围' || header.includes('攻击力倍率')) {
+                    atkTimesColInMonsterGroup = i;
+                }
+            }
+
+            if (enemyGroupIdColIndex === -1) {
+                console.log('怪物组表头:', monsterHeaderRow);
+                alert('未找到"敌人组ID"列，请检查列名是否正确');
+                return;
+            }
+            if (uniqueIdColIndex === -1) {
+                console.log('怪物组表头:', monsterHeaderRow);
+                alert('未找到"唯一ID"列，请检查列名是否正确。当前表头：' + JSON.stringify(monsterHeaderRow));
+                return;
+            }
+
+            // 加权随机选择函数
+            function weightedRandomSelect(items, weights) {
+                if (items.length === 0) return null;
+                if (items.length !== weights.length) {
+                    // 如果权重数组长度不匹配，使用均匀权重
+                    const index = Math.floor(Math.random() * items.length);
+                    return items[index];
+                }
+                // 计算总权重
+                const totalWeight = weights.reduce((sum, w) => sum + w, 0);
+                if (totalWeight <= 0) {
+                    // 如果总权重为0或负数，使用均匀随机
+                    const index = Math.floor(Math.random() * items.length);
+                    return items[index];
+                }
+                // 生成随机数
+                let random = Math.random() * totalWeight;
+                // 根据权重选择
+                for (let i = 0; i < items.length; i++) {
+                    random -= weights[i];
+                    if (random <= 0) {
+                        return items[i];
+                    }
+                }
+                // 如果循环结束还没返回，返回最后一个
+                return items[items.length - 1];
+            }
+
+            // 解析权重字符串，例如 "Common*30|Fly*30|Tank*40"
+            function parseWeightString(weightStr) {
+                const weightMap = {};
+                if (!weightStr || weightStr === '') return weightMap;
+                const parts = weightStr.split('|');
+                for (let part of parts) {
+                    const match = part.match(/^(.+?)\*(\d+)$/);
+                    if (match) {
+                        const tag = match[1].trim();
+                        const weight = parseInt(match[2], 10);
+                        weightMap[tag] = weight;
+                    }
+                }
+                return weightMap;
+            }
+
+            // 根据主题、关卡类型和权重选择怪物ID
+            function selectMonsterId(theme, stageType, weightStr) {
+                if (!monsterDistributionSheet || monsterDistributionData.length === 0) {
+                    console.log('未找到怪物分布sheet页或数据为空');
+                    return '';
+                }
+                
+                // 检查是否找到了必要的列
+                if (monsterIdColInDistribution < 0 || themeColInDistribution < 0 || stageTypeColInDistribution < 0) {
+                    console.log('怪物分布表缺少必要的列:', {
+                        monsterIdCol: monsterIdColInDistribution,
+                        themeCol: themeColInDistribution,
+                        stageTypeCol: stageTypeColInDistribution
+                    });
+                    return '';
+                }
+                
+                // 筛选符合条件的怪物：主题匹配且关卡类型匹配
+                const candidates = [];
+                for (let row = 1; row < monsterDistributionData.length; row++) {
+                    const monsterTheme = String(monsterDistributionData[row][themeColInDistribution] || '').trim();
+                    const monsterStageType = String(monsterDistributionData[row][stageTypeColInDistribution] || '').trim();
+                    const monsterTag = tagColInDistribution >= 0 ? String(monsterDistributionData[row][tagColInDistribution] || '').trim() : '';
+                    const monsterId = monsterDistributionData[row][monsterIdColInDistribution];
+                    
+                    // 检查主题是否匹配
+                    if (monsterTheme !== theme) continue;
+                    if (monsterId === '' || monsterId === null || monsterId === undefined) continue;
+                    
+                    // 检查关卡类型是否匹配（支持"1*4"这种格式，表示1或4都可以）
+                    let stageTypeMatch = false;
+                    if (monsterStageType.includes('*')) {
+                        // 如果包含"*"，拆分为多个值进行匹配
+                        const stageTypeValues = monsterStageType.split('*').map(v => String(v).trim());
+                        stageTypeMatch = stageTypeValues.includes(stageType);
+                    } else {
+                        // 否则使用精确匹配
+                        stageTypeMatch = monsterStageType === stageType;
+                    }
+                    
+                    if (stageTypeMatch) {
+                        candidates.push({
+                            id: monsterId,
+                            tag: monsterTag
+                        });
+                    }
+                }
+                
+                if (candidates.length === 0) {
+                    console.log('没有找到符合条件的怪物:', { theme, stageType, weightStr });
+                    return '';
+                }
+                
+                // 如果没有权重字符串，使用均匀随机
+                if (!weightStr || weightStr === '') {
+                    const randomIndex = Math.floor(Math.random() * candidates.length);
+                    return candidates[randomIndex].id;
+                }
+                
+                // 解析权重字符串
+                const weightMap = parseWeightString(weightStr);
+                
+                // 如果没有有效的权重映射，使用均匀随机
+                if (Object.keys(weightMap).length === 0) {
+                    const randomIndex = Math.floor(Math.random() * candidates.length);
+                    return candidates[randomIndex].id;
+                }
+                
+                // 按标签分组
+                const tagGroups = {};
+                for (let candidate of candidates) {
+                    const tag = candidate.tag || '';
+                    if (!tagGroups[tag]) {
+                        tagGroups[tag] = [];
+                    }
+                    tagGroups[tag].push(candidate.id);
+                }
+                
+                // 根据权重选择标签
+                const tags = Object.keys(tagGroups);
+                const tagWeights = tags.map(tag => weightMap[tag] || 0);
+                const selectedTag = weightedRandomSelect(tags, tagWeights);
+                
+                if (!selectedTag || !tagGroups[selectedTag] || tagGroups[selectedTag].length === 0) {
+                    // 如果选择的标签没有对应的怪物，使用均匀随机
+                    const randomIndex = Math.floor(Math.random() * candidates.length);
+                    return candidates[randomIndex].id;
+                }
+                
+                // 在选中的标签组中均匀随机选择一个
+                const selectedGroup = tagGroups[selectedTag];
+                const randomIndex = Math.floor(Math.random() * selectedGroup.length);
+                return selectedGroup[randomIndex];
+            }
+
+            // 获取处理选项
+            const processOption = document.querySelector('input[name="processOption"]:checked');
+            const processType = processOption ? processOption.value : 'all';
+            let targetChapterId = null;
+            
+            // 如果是分章节生成，获取章节ID
+            if (processType === 'single') {
+                const singleChapterProcessIdInput = document.getElementById('singleChapterProcessId');
+                const inputValue = singleChapterProcessIdInput ? singleChapterProcessIdInput.value : null;
+                if (!inputValue || inputValue === '') {
+                    alert('请输入章节ID');
+                    return;
+                }
+                targetChapterId = Number(inputValue);
+                if (isNaN(targetChapterId) || targetChapterId <= 0) {
+                    alert('请输入有效的章节ID');
+                    return;
+                }
+            }
+
+            // 生成数据：根据规则填充"敌人组ID"列（从第二行开始）
+            // 同时按章节ID分组计数，生成唯一ID
+            const generatedData = []; // 对象数组，包含enemyGroupId、chapterId、uniqueId、stageType、theme和enemyId
+            const chapterCounters = {}; // 每个章节的计数器，用于生成唯一ID
+            
+            // 遍历"关卡规划总"的每一行（从第二行开始，索引1）
+            for (let row = 1; row < planData.length; row++) {
+                const chapter = planData[row][chapterColIndex];
+                const stageSeq = planData[row][stageSeqColIndex];
+                const monsterCount = planData[row][monsterCountColIndex];
+                const stageType = stageTypeColIndex >= 0 ? planData[row][stageTypeColIndex] : '';
+                const bossElite = bossEliteColIndex >= 0 ? planData[row][bossEliteColIndex] : '';
+
+                // 验证数据有效性
+                if (chapter === '' || chapter === null || chapter === undefined) continue;
+                
+                // 如果是分章节生成，只处理指定章节的数据
+                if (processType === 'single') {
+                    const numChapter = Number(chapter);
+                    if (isNaN(numChapter) || numChapter !== targetChapterId) {
+                        continue; // 跳过不是目标章节的行
+                    }
+                }
+                if (stageSeq === '' || stageSeq === null || stageSeq === undefined) continue;
+                const numMonsterCount = Number(monsterCount);
+                if (isNaN(numMonsterCount) || numMonsterCount <= 0) continue;
+
+                // 计算值：小关序号 * 100 + 1
+                const numStageSeq = Number(stageSeq);
+                if (isNaN(numStageSeq)) continue;
+                
+                const enemyGroupId = numStageSeq * 100 + 1;
+                const numChapter = Number(chapter);
+                if (isNaN(numChapter)) continue;
+
+                // 从章节总中获取该章节的主题和权重
+                const theme = String(chapterThemeMap[numChapter] || '').trim();
+                const weightStr = String(chapterWeightMap[numChapter] || '').trim();
+                // 将stageType转换为字符串，确保匹配
+                const stageTypeStr = stageType !== '' && stageType !== null && stageType !== undefined ? String(stageType).trim() : '';
+                // 确保stageType是字符串格式，用于后续填充
+                const stageTypeValue = stageType !== '' && stageType !== null && stageType !== undefined ? String(stageType).trim() : '';
+                // 确保stageSeq是数字格式，用于后续填充（同一enemyGroupId的所有记录使用相同的小关序号）
+                const stageSeqValue = numStageSeq;
+                
+                // 根据规则计算标准血量倍率范围和标准攻击力倍率范围
+                // 规则：如果关卡类型为1或4，且章节ID为1，则填入"1*1"
+                //       如果关卡类型为1或4，但章节ID不为1，则填入"0.95*1.05"
+                //       如果关卡类型不为1或4，则填入"1*1"
+                const numStageType = Number(stageTypeValue);
+                let hpTimesValue = '1*1'; // 默认值
+                let atkTimesValue = '1*1'; // 默认值
+                if (!isNaN(numStageType) && (numStageType === 1 || numStageType === 4)) {
+                    // 关卡类型为1或4
+                    if (numChapter === 1) {
+                        // 章节ID为1
+                        hpTimesValue = '1*1';
+                        atkTimesValue = '1*1';
+                    } else {
+                        // 章节ID不为1
+                        hpTimesValue = '0.95*1.05';
+                        atkTimesValue = '0.95*1.05';
+                    }
+                } else {
+                    // 关卡类型不为1或4
+                    hpTimesValue = '1*1';
+                    atkTimesValue = '1*1';
+                }
+
+                // 初始化该章节的计数器（如果还没有）
+                if (!chapterCounters[numChapter]) {
+                    chapterCounters[numChapter] = 0;
+                }
+
+                // 根据"怪物数量"重复填写相应次数
+                // 在生成"敌人组ID"的同时，按章节ID分组计数生成"唯一ID"，并根据规则随机选择怪物ID
+                // 注意：同一个enemyGroupId的所有记录，stageType、theme、stageSeq、hpTimes和atkTimes应该保持一致（都使用当前行的值）
+                for (let i = 0; i < numMonsterCount; i++) {
+                    // 计数器加1，生成唯一ID
+                    chapterCounters[numChapter]++;
+                    const uniqueId = chapterCounters[numChapter];
+                    
+                    // 根据关卡类型选择怪物ID
+                    // 如果关卡类型不是1或4，使用"boss和精英"列的值
+                    // 如果关卡类型是1或4，使用随机选择逻辑
+                    let enemyId = '';
+                    if (!isNaN(numStageType) && (numStageType === 1 || numStageType === 4)) {
+                        // 关卡类型为1或4，使用随机选择逻辑
+                        enemyId = selectMonsterId(theme, stageTypeStr, weightStr);
+                    } else {
+                        // 关卡类型不是1或4，使用"boss和精英"列的值
+                        enemyId = bossElite !== '' && bossElite !== null && bossElite !== undefined ? String(bossElite).trim() : '';
+                    }
+                    
+                    generatedData.push({
+                        enemyGroupId: enemyGroupId,
+                        chapterId: numChapter,
+                        uniqueId: uniqueId,
+                        stageType: stageTypeValue, // 使用统一的stageTypeValue，确保同一enemyGroupId的记录一致
+                        theme: theme, // 使用统一的theme，确保同一enemyGroupId的记录一致
+                        stageSeq: stageSeqValue, // 使用统一的stageSeqValue，确保同一enemyGroupId的记录一致
+                        hpTimes: hpTimesValue, // 使用统一的hpTimesValue，确保同一enemyGroupId的记录一致
+                        atkTimes: atkTimesValue, // 使用统一的atkTimesValue，确保同一enemyGroupId的记录一致
+                        enemyId: enemyId,
+                        monsterCount: numMonsterCount, // 记录怪物数量，用于后续分配站位
+                        position: '' // 站位，稍后分配
+                    });
+                }
+            }
+            
+            // 根据"敌人站位"表分配站位
+            // 按"敌人组ID"分组，为每组分配站位
+            function getPositionIdByMonsterCount(count) {
+                if (!enemyPositionSheet || enemyPositionData.length === 0) {
+                    console.log(`怪物数量${count}: 未找到"敌人站位"sheet页或数据为空`);
+                    return '';
+                }
+                if (monsterCountColInPosition < 0 || positionIdColInPosition < 0) {
+                    console.log(`怪物数量${count}: 未找到必要的列（怪物数量列: ${monsterCountColInPosition}, 站位id列: ${positionIdColInPosition}）`);
+                    return '';
+                }
+                
+                // 查找所有匹配的行
+                const matchingRows = [];
+                for (let row = 1; row < enemyPositionData.length; row++) {
+                    const rowMonsterCount = Number(enemyPositionData[row][monsterCountColInPosition]);
+                    if (!isNaN(rowMonsterCount) && rowMonsterCount === count) {
+                        const positionId = String(enemyPositionData[row][positionIdColInPosition] || '').trim();
+                        if (positionId !== '') {
+                            matchingRows.push(positionId);
+                        }
+                    }
+                }
+                
+                // 如果找到匹配的行，随机选择一行
+                if (matchingRows.length > 0) {
+                    const randomIndex = Math.floor(Math.random() * matchingRows.length);
+                    console.log(`怪物数量${count}: 找到${matchingRows.length}个匹配的站位id，随机选择: ${matchingRows[randomIndex]}`);
+                    return matchingRows[randomIndex];
+                }
+                
+                console.log(`怪物数量${count}: 在"敌人站位"表中未找到匹配的怪物数量`);
+                return '';
+            }
+            
+            // 分配站位：确保相邻行不重复
+            function assignPositions(groupData, monsterCount) {
+                if (groupData.length === 0) return;
+                if (monsterCount <= 0) return;
+                
+                // 从"敌人站位"表中获取站位id
+                const positionIdStr = getPositionIdByMonsterCount(monsterCount);
+                if (!positionIdStr || positionIdStr === '') return;
+                
+                // 拆分站位id（例如"501*502*503"拆分为[501, 502, 503]）
+                const positionIds = positionIdStr.split('*').map(v => String(v).trim()).filter(v => v !== '');
+                if (positionIds.length === 0) return;
+                
+                // 分配站位，确保所有数据都不重复
+                // 使用groupData.length而不是monsterCount，因为groupData.length是实际需要分配的行数
+                const needCount = groupData.length;
+                if (positionIds.length >= needCount) {
+                    // 如果拆分后的数量大于等于需要分配的数量，取前needCount个，打乱顺序后分配
+                    const shuffledPositions = positionIds.slice(0, needCount);
+                    // 打乱顺序（Fisher-Yates洗牌算法）
+                    for (let i = shuffledPositions.length - 1; i > 0; i--) {
+                        const j = Math.floor(Math.random() * (i + 1));
+                        [shuffledPositions[i], shuffledPositions[j]] = [shuffledPositions[j], shuffledPositions[i]];
+                    }
+                    // 按打乱后的顺序分配
+                    for (let i = 0; i < groupData.length; i++) {
+                        groupData[i].position = shuffledPositions[i];
+                    }
+                } else {
+                    // 如果拆分后的数量小于需要分配的数量，循环使用
+                    for (let i = 0; i < groupData.length; i++) {
+                        groupData[i].position = positionIds[i % positionIds.length];
+                    }
+                }
+            }
+            
+            // 按"敌人组ID"+"怪物数量"分组，为每组分配站位
+            // 使用组合键：enemyGroupId + "_" + monsterCount
+            const enemyGroupMap = {}; // {enemyGroupId_monsterCount: [data1, data2, ...], ...}
+            for (let i = 0; i < generatedData.length; i++) {
+                const enemyGroupId = generatedData[i].enemyGroupId;
+                const monsterCount = generatedData[i].monsterCount;
+                const groupKey = enemyGroupId + "_" + monsterCount;
+                if (!enemyGroupMap[groupKey]) {
+                    enemyGroupMap[groupKey] = [];
+                }
+                enemyGroupMap[groupKey].push(generatedData[i]);
+            }
+            
+            // 为每组分配站位
+            for (let groupKey in enemyGroupMap) {
+                const groupData = enemyGroupMap[groupKey];
+                // 直接从groupData中获取monsterCount，因为所有数据的monsterCount都相同
+                if (groupData.length > 0 && groupData[0].monsterCount) {
+                    const monsterCount = groupData[0].monsterCount;
+                    console.log(`为组分配站位: groupKey=${groupKey}, groupData.length=${groupData.length}, monsterCount=${monsterCount}`);
+                    assignPositions(groupData, monsterCount);
+                } else {
+                    console.log(`组数据无效: groupKey=${groupKey}, groupData.length=${groupData.length}`);
+                }
+            }
+
+            // 创建处理后的工作簿（复制原工作簿）
+            processedWorkbook = XLSX.utils.book_new();
+            workbookData.SheetNames.forEach(sheetName => {
+                const originalSheet = workbookData.Sheets[sheetName];
+                const jsonData = XLSX.utils.sheet_to_json(originalSheet, { header: 1, defval: '', raw: false });
+                const newSheet = XLSX.utils.aoa_to_sheet(jsonData);
+                
+                // 如果是"怪物组"sheet页，更新"敌人组ID"列、"唯一ID"列、"章节"列、"关卡类型"列、"主题"列和"小关序号"列的数据
+                if (sheetName === monsterGroupSheetName) {
+                    // 从第二行开始（索引1）填充数据
+                    for (let i = 0; i < generatedData.length; i++) {
+                        const rowIndex = i + 1; // 第二行开始（索引1）
+                        
+                        // 填充敌人组ID
+                        const enemyGroupCellAddress = XLSX.utils.encode_cell({ r: rowIndex, c: enemyGroupIdColIndex });
+                        newSheet[enemyGroupCellAddress] = { v: generatedData[i].enemyGroupId, t: 'n' };
+                        
+                        // 填充唯一ID
+                        const uniqueIdCellAddress = XLSX.utils.encode_cell({ r: rowIndex, c: uniqueIdColIndex });
+                        newSheet[uniqueIdCellAddress] = { v: generatedData[i].uniqueId, t: 'n' };
+                        
+                        // 填充章节ID（如果找到了章节列）
+                        if (chapterColInMonsterGroup >= 0) {
+                            const chapterCellAddress = XLSX.utils.encode_cell({ r: rowIndex, c: chapterColInMonsterGroup });
+                            newSheet[chapterCellAddress] = { v: generatedData[i].chapterId, t: 'n' };
+                        }
+                        
+                        // 填充关卡类型（如果找到了关卡类型列）
+                        if (stageTypeColInMonsterGroup >= 0) {
+                            const stageTypeCellAddress = XLSX.utils.encode_cell({ r: rowIndex, c: stageTypeColInMonsterGroup });
+                            const stageTypeValue = generatedData[i].stageType || '';
+                            // 判断关卡类型是数字还是字符串
+                            const numStageType = Number(stageTypeValue);
+                            newSheet[stageTypeCellAddress] = { 
+                                v: stageTypeValue, 
+                                t: (stageTypeValue !== '' && !isNaN(numStageType)) ? 'n' : 's' 
+                            };
+                        }
+                        
+                        // 填充主题（如果找到了主题列）
+                        if (themeColInMonsterGroup >= 0) {
+                            const themeCellAddress = XLSX.utils.encode_cell({ r: rowIndex, c: themeColInMonsterGroup });
+                            const themeValue = generatedData[i].theme || '';
+                            // 判断主题是数字还是字符串
+                            const numTheme = Number(themeValue);
+                            newSheet[themeCellAddress] = { 
+                                v: themeValue, 
+                                t: (themeValue !== '' && !isNaN(numTheme)) ? 'n' : 's' 
+                            };
+                        }
+                        
+                        // 填充小关序号（如果找到了小关序号列）
+                        if (stageSeqColInMonsterGroup >= 0) {
+                            const stageSeqCellAddress = XLSX.utils.encode_cell({ r: rowIndex, c: stageSeqColInMonsterGroup });
+                            const stageSeqValue = generatedData[i].stageSeq || '';
+                            // 判断小关序号是数字还是字符串
+                            const numStageSeq = Number(stageSeqValue);
+                            newSheet[stageSeqCellAddress] = { 
+                                v: stageSeqValue, 
+                                t: (stageSeqValue !== '' && !isNaN(numStageSeq)) ? 'n' : 's' 
+                            };
+                        }
+                        
+                        // 填充敌人ID（如果找到了敌人ID列）
+                        if (enemyIdColInMonsterGroup >= 0) {
+                            const enemyIdCellAddress = XLSX.utils.encode_cell({ r: rowIndex, c: enemyIdColInMonsterGroup });
+                            const enemyIdValue = generatedData[i].enemyId || '';
+                            // 判断敌人ID是数字还是字符串
+                            const numEnemyId = Number(enemyIdValue);
+                            newSheet[enemyIdCellAddress] = { 
+                                v: enemyIdValue, 
+                                t: (enemyIdValue !== '' && !isNaN(numEnemyId)) ? 'n' : 's' 
+                            };
+                        }
+                        
+                        // 填充站位（如果找到了站位列）
+                        if (positionColInMonsterGroup >= 0) {
+                            const positionCellAddress = XLSX.utils.encode_cell({ r: rowIndex, c: positionColInMonsterGroup });
+                            const positionValue = generatedData[i].position || '';
+                            // 判断站位是数字还是字符串
+                            const numPosition = Number(positionValue);
+                            newSheet[positionCellAddress] = { 
+                                v: positionValue, 
+                                t: (positionValue !== '' && !isNaN(numPosition)) ? 'n' : 's' 
+                            };
+                        }
+                        
+                        // 填充标准血量倍率范围（如果找到了标准血量倍率范围列）
+                        if (hpTimesColInMonsterGroup >= 0) {
+                            const hpTimesCellAddress = XLSX.utils.encode_cell({ r: rowIndex, c: hpTimesColInMonsterGroup });
+                            const hpTimesValue = generatedData[i].hpTimes || '';
+                            newSheet[hpTimesCellAddress] = { 
+                                v: hpTimesValue, 
+                                t: 's' // 倍率范围是字符串格式（如"1*1"或"0.95*1.05"）
+                            };
+                        }
+                        
+                        // 填充标准攻击力倍率范围（如果找到了标准攻击力倍率范围列）
+                        if (atkTimesColInMonsterGroup >= 0) {
+                            const atkTimesCellAddress = XLSX.utils.encode_cell({ r: rowIndex, c: atkTimesColInMonsterGroup });
+                            const atkTimesValue = generatedData[i].atkTimes || '';
+                            newSheet[atkTimesCellAddress] = { 
+                                v: atkTimesValue, 
+                                t: 's' // 倍率范围是字符串格式（如"1*1"或"0.95*1.05"）
+                            };
+                        }
+                    }
+                    
+                    // 更新范围
+                    const colsToCheck = [enemyGroupIdColIndex, uniqueIdColIndex];
+                    if (chapterColInMonsterGroup >= 0) colsToCheck.push(chapterColInMonsterGroup);
+                    if (stageTypeColInMonsterGroup >= 0) colsToCheck.push(stageTypeColInMonsterGroup);
+                    if (themeColInMonsterGroup >= 0) colsToCheck.push(themeColInMonsterGroup);
+                    if (stageSeqColInMonsterGroup >= 0) colsToCheck.push(stageSeqColInMonsterGroup);
+                    if (enemyIdColInMonsterGroup >= 0) colsToCheck.push(enemyIdColInMonsterGroup);
+                    if (positionColInMonsterGroup >= 0) colsToCheck.push(positionColInMonsterGroup);
+                    if (hpTimesColInMonsterGroup >= 0) colsToCheck.push(hpTimesColInMonsterGroup);
+                    if (atkTimesColInMonsterGroup >= 0) colsToCheck.push(atkTimesColInMonsterGroup);
+                    const maxCol = Math.max(...jsonData.map(row => row.length), ...colsToCheck);
+                    const maxRow = Math.max(jsonData.length - 1, 1 + generatedData.length - 1);
+                    newSheet['!ref'] = XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: maxRow, c: maxCol } });
+                }
+                
+                XLSX.utils.book_append_sheet(processedWorkbook, newSheet, sheetName);
+            });
+
+            // 显示处理结果
+            const resultDiv = document.getElementById('processResult');
+            const uniqueIdCount = generatedData.length;
+            const chapterIdCount = chapterColInMonsterGroup >= 0 ? generatedData.length : 0;
+            const stageTypeCount = stageTypeColInMonsterGroup >= 0 ? generatedData.length : 0;
+            const themeCount = themeColInMonsterGroup >= 0 ? generatedData.length : 0;
+            const enemyIdCount = enemyIdColInMonsterGroup >= 0 ? generatedData.length : 0;
+            let resultText = `<strong>处理完成！</strong><br>已生成 ${generatedData.length} 个"敌人组ID"数据<br>已生成 ${uniqueIdCount} 个"唯一ID"数据`;
+            if (chapterIdCount > 0) {
+                resultText += `<br>已生成 ${chapterIdCount} 个"章节ID"数据`;
+            }
+            if (stageTypeCount > 0) {
+                resultText += `<br>已生成 ${stageTypeCount} 个"关卡类型"数据`;
+            }
+            if (themeCount > 0) {
+                resultText += `<br>已生成 ${themeCount} 个"主题"数据`;
+            }
+            if (enemyIdCount > 0) {
+                resultText += `<br>已生成 ${enemyIdCount} 个"敌人ID"数据`;
+            }
+            if (positionColInMonsterGroup >= 0) {
+                const positionCount = generatedData.filter(d => d.position && d.position !== '').length;
+                const positionEmptyCount = generatedData.filter(d => !d.position || d.position === '').length;
+                resultText += `<br>已生成 ${positionCount} 个"站位"数据`;
+                if (positionEmptyCount > 0) {
+                    resultText += `<br><span style="color: #dc3545;">⚠️ 有 ${positionEmptyCount} 个"站位"数据为空</span>`;
+                    resultText += `<br><span style="color: #6c757d; font-size: 0.9em;">请打开浏览器控制台（按F12）查看详细原因</span>`;
+                }
+            } else {
+                resultText += `<br><span style="color: #ffc107;">⚠️ 未找到"站位"列，无法填充站位数据</span>`;
+            }
+            resultDiv.innerHTML = resultText;
+            resultDiv.style.display = 'block';
+
+            // 保存生成的数据供导出使用
+            globalGeneratedData = generatedData;
+
+            // 显示处理后的数据预览
+            displayProcessedData(processedWorkbook);
+        }
+
+        // 显示处理后的数据
+        function displayProcessedData(wb) {
+            const displayDiv = document.getElementById('processedDataDisplay');
+            displayDiv.style.display = 'block';
+
+            // 创建sheet标签
+            const sheetTabsDiv = document.getElementById('processedSheetTabs');
+            sheetTabsDiv.innerHTML = '';
+            wb.SheetNames.forEach((name, index) => {
+                const tab = document.createElement('div');
+                tab.className = 'sheet-tab' + (index === 0 ? ' active' : '');
+                tab.textContent = name;
+                tab.onclick = () => {
+                    document.querySelectorAll('#processedSheetTabs .sheet-tab').forEach(t => t.classList.remove('active'));
+                    tab.classList.add('active');
+                    displayProcessedSheet(wb.Sheets[name], name);
+                };
+                sheetTabsDiv.appendChild(tab);
+            });
+
+            // 显示第一个sheet
+            if (wb.SheetNames.length > 0) {
+                displayProcessedSheet(wb.Sheets[wb.SheetNames[0]], wb.SheetNames[0]);
+            }
+        }
+
+        // 显示处理后的sheet数据
+        function displayProcessedSheet(sheet, sheetName) {
+            const container = document.getElementById('processedTableContainer');
+            const range = XLSX.utils.decode_range(sheet['!ref'] || 'A1');
+            
+            let html = '<div class="table-wrapper"><table class="excel-table"><thead><tr>';
+            html += '<th class="row-header">行/列</th>';
+            for (let C = range.s.c; C <= range.e.c; C++) {
+                const colName = getExcelColumnName(C);
+                html += `<th>${colName}</th>`;
+            }
+            html += '</tr></thead><tbody>';
+
+            for (let R = range.s.r; R <= range.e.r; R++) {
+                html += '<tr>';
+                html += `<td class="row-header">${R + 1}</td>`;
+                for (let C = range.s.c; C <= range.e.c; C++) {
+                    const cellAddress = XLSX.utils.encode_cell({ r: R, c: C });
+                    const cell = sheet[cellAddress];
+                    const cellValue = cell ? (cell.w || cell.v || '') : '';
+                    const displayValue = cellValue === '' ? '&nbsp;' : escapeHtml(String(cellValue));
+                    html += `<td>${displayValue}</td>`;
+                }
+                html += '</tr>';
+            }
+
+            html += '</tbody></table></div>';
+            container.innerHTML = html;
+        }
+
+        // 创建stage_id sheet页
+        function createStageSheet(chapterId, stageData) {
+            const sheet = XLSX.utils.aoa_to_sheet([]);
+            
+            // 设置前5行的固定值
+            const headerData = [
+                ['##var', '##var', '##var', '##var', '##var', '##var', '##var'], // 第1行
+                ['##var', 'id', 'chapter', 'stage', 'stageType', 'bossAnim', 'stageExp'], // 第2行
+                ['##type', 'int', 'int', 'int', 'int', '(array#sep=*),float', 'int'], // 第3行
+                ['##group', 'c,s', 'c,s', 'c,s', 'c,s', 'c,s', 'c,s'], // 第4行
+                ['##', '层ID', '章节ID', '层ID', '层类型', 'BOSS虚影', '过关经验值'] // 第5行
+            ];
+            
+            // 写入表头（前5行）
+            for (let row = 0; row < 5; row++) {
+                for (let col = 0; col < 7; col++) {
+                    const cellAddress = XLSX.utils.encode_cell({ r: row, c: col });
+                    const value = headerData[row][col] || '';
+                    sheet[cellAddress] = { v: value, t: 's' };
+                }
+            }
+            
+            // 从stageData填充数据（从第6行开始，索引5）
+            if (stageData && stageData.length > 0) {
+                stageData.forEach((item, index) => {
+                    const row = 5 + index; // 从第6行开始（索引5）
+                    
+                    // B列（索引1）填入id（层ID，对应小关序号）
+                    const cellAddressB = XLSX.utils.encode_cell({ r: row, c: 1 });
+                    sheet[cellAddressB] = { v: item.id || '', t: typeof item.id === 'number' ? 'n' : 's' };
+                    
+                    // C列（索引2）填入章节ID
+                    const cellAddressC = XLSX.utils.encode_cell({ r: row, c: 2 });
+                    sheet[cellAddressC] = { v: item.chapterId || chapterId, t: 'n' };
+                    
+                    // D列（索引3）填入stage（层ID，对应小关序号）
+                    const cellAddressD = XLSX.utils.encode_cell({ r: row, c: 3 });
+                    sheet[cellAddressD] = { v: item.stage || item.id || '', t: typeof item.stage === 'number' ? 'n' : (typeof item.id === 'number' ? 'n' : 's') };
+                    
+                    // E列（索引4）填入stageType（层类型）
+                    const cellAddressE = XLSX.utils.encode_cell({ r: row, c: 4 });
+                    sheet[cellAddressE] = { v: item.stageType || '', t: typeof item.stageType === 'number' ? 'n' : 's' };
+                    
+                    // F列（索引5）填入bossAnim（BOSS虚影）
+                    const cellAddressF = XLSX.utils.encode_cell({ r: row, c: 5 });
+                    sheet[cellAddressF] = { v: item.bossAnim || '', t: 's' };
+                    
+                    // G列（索引6）填入stageExp（过关经验值）
+                    const cellAddressG = XLSX.utils.encode_cell({ r: row, c: 6 });
+                    sheet[cellAddressG] = { v: item.stageExp || '', t: typeof item.stageExp === 'number' ? 'n' : 's' };
+                });
+            }
+            
+            // 设置范围
+            const maxRow = Math.max(4, 5 + (stageData ? stageData.length - 1 : 0));
+            sheet['!ref'] = XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: maxRow, c: 6 } });
+            
+            return sheet;
+        }
+
+        // 创建stageEvent_id sheet页
+        function createStageEventSheet(chapterId, eventData) {
+            const sheet = XLSX.utils.aoa_to_sheet([]);
+            
+            // 设置前5行的固定值
+            const headerData = [
+                ['##var', '##var', '##var', '##var'], // 第1行
+                ['##var', 'id', 'eventId', 'eventFirst'], // 第2行
+                ['##type', 'int', '(array#sep=|),(array#sep=*),int', 'int'], // 第3行
+                ['##group', 'c,s', 'c,s', 'c,s'], // 第4行
+                ['##', '层ID', '事件随机', '首次事件'] // 第5行
+            ];
+            
+            // 写入表头（前5行）
+            for (let row = 0; row < 5; row++) {
+                for (let col = 0; col < 4; col++) {
+                    const cellAddress = XLSX.utils.encode_cell({ r: row, c: col });
+                    const value = headerData[row][col] || '';
+                    sheet[cellAddress] = { v: value, t: 's' };
+                }
+            }
+            
+            // 从eventData填充数据（从第6行开始，索引5）
+            if (eventData && eventData.length > 0) {
+                eventData.forEach((item, index) => {
+                    const row = 5 + index;
+                    
+                    // B列（索引1）填入id（层ID，对应小关序号）
+                    const cellAddressB = XLSX.utils.encode_cell({ r: row, c: 1 });
+                    sheet[cellAddressB] = { v: item.id || '', t: typeof item.id === 'number' ? 'n' : 's' };
+                    
+                    // C列（索引2）填入eventId（事件随机）
+                    const cellAddressC = XLSX.utils.encode_cell({ r: row, c: 2 });
+                    sheet[cellAddressC] = { v: item.eventId || '', t: 's' };
+                    
+                    // D列（索引3）填入eventFirst（首次事件）
+                    const cellAddressD = XLSX.utils.encode_cell({ r: row, c: 3 });
+                    sheet[cellAddressD] = { v: item.eventFirst || '', t: typeof item.eventFirst === 'number' ? 'n' : 's' };
+                });
+            }
+            
+            // 设置范围
+            const maxRow = Math.max(4, 5 + (eventData ? eventData.length - 1 : 0));
+            sheet['!ref'] = XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: maxRow, c: 3 } });
+            
+            return sheet;
+        }
+
+        // 创建stageBattle_id sheet页
+        function createStageBattleSheet(chapterId, battleData) {
+            const sheet = XLSX.utils.aoa_to_sheet([]);
+            
+            // 设置前5行的固定值
+            const headerData = [
+                ['##var', '##var', '##var', '##var', '##var', '##var', '##var', '##var', '##var', '##var', '##var', '##var', '##var', '##var'], // 第1行
+                ['##var', 'id', 'hp', 'atk', 'firstHp', 'firstAtk', 'group', 'rogue', 'point', 'roll', 'diceHand', 'prop', 'enemyExp', 'stageExp'], // 第2行
+                ['##type', 'int', 'int', 'int', 'int', 'int', '(array#sep=*),int', '(array#sep=*),int', '(array#sep=|),(array#sep=*),int', '(array#sep=|),(array#sep=*),int', '(array#sep=*),int', '(array#sep=|),(array#sep=*),int', 'int', 'int'], // 第3行
+                ['##group', 'c,s', 'c,s', 'c,s', 'c,s', 'c,s', 'c,s', 'c,s', 'c,s', 'c,s', 'c,s', 'c,s', 'c,s', 'c,s'], // 第4行
+                ['##', '层ID', '标准血量', '标准攻击力', '第一次血量', '第一次攻击力', '随机敌人组', '结束是否有rogue', '第一次到达必出点数', '第几次重置出某个点数', '牌型概率', '道具掉落', '单怪掉落经验值', '过关经验值'] // 第5行
+            ];
+            
+            // 写入表头（前5行）
+            for (let row = 0; row < 5; row++) {
+                for (let col = 0; col < 14; col++) {
+                    const cellAddress = XLSX.utils.encode_cell({ r: row, c: col });
+                    const value = headerData[row][col] || '';
+                    sheet[cellAddress] = { v: value, t: 's' };
+                }
+            }
+            
+            // 从battleData填充数据（从第6行开始，索引5）
+            if (battleData && battleData.length > 0) {
+                battleData.forEach((item, index) => {
+                    const row = 5 + index;
+                    
+                    // B列（索引1）填入id（层ID）
+                    const cellAddressB = XLSX.utils.encode_cell({ r: row, c: 1 });
+                    sheet[cellAddressB] = { v: item.id || '', t: typeof item.id === 'number' ? 'n' : 's' };
+                    
+                    // C列（索引2）填入hp（标准血量）
+                    const cellAddressC = XLSX.utils.encode_cell({ r: row, c: 2 });
+                    sheet[cellAddressC] = { v: item.hp || '', t: typeof item.hp === 'number' ? 'n' : 's' };
+                    
+                    // D列（索引3）填入atk（标准攻击力）
+                    const cellAddressD = XLSX.utils.encode_cell({ r: row, c: 3 });
+                    sheet[cellAddressD] = { v: item.atk || '', t: typeof item.atk === 'number' ? 'n' : 's' };
+                    
+                    // E列（索引4）填入firstHp（第一次血量）
+                    const cellAddressE = XLSX.utils.encode_cell({ r: row, c: 4 });
+                    sheet[cellAddressE] = { v: item.firstHp || '', t: typeof item.firstHp === 'number' ? 'n' : 's' };
+                    
+                    // F列（索引5）填入firstAtk（第一次攻击力）
+                    const cellAddressF = XLSX.utils.encode_cell({ r: row, c: 5 });
+                    sheet[cellAddressF] = { v: item.firstAtk || '', t: typeof item.firstAtk === 'number' ? 'n' : 's' };
+                    
+                    // G列（索引6）填入group（随机敌人组，小关序号*100+1）
+                    const cellAddressG = XLSX.utils.encode_cell({ r: row, c: 6 });
+                    const groupValue = item.group !== '' && item.group !== null && item.group !== undefined ? item.group : '';
+                    sheet[cellAddressG] = { v: groupValue, t: typeof groupValue === 'number' ? 'n' : 's' };
+                    
+                    // H列（索引7）填入rogue（结束是否有rogue）
+                    const cellAddressH = XLSX.utils.encode_cell({ r: row, c: 7 });
+                    sheet[cellAddressH] = { v: item.rogue || '', t: 's' };
+                    
+                    // I列（索引8）填入point（第一次到达必出点数）
+                    const cellAddressI = XLSX.utils.encode_cell({ r: row, c: 8 });
+                    sheet[cellAddressI] = { v: item.point || '', t: 's' };
+                    
+                    // J列（索引9）填入roll（第几次重置出某个点数）
+                    const cellAddressJ = XLSX.utils.encode_cell({ r: row, c: 9 });
+                    sheet[cellAddressJ] = { v: item.roll || '', t: 's' };
+                    
+                    // K列（索引10）填入diceHand（牌型概率，如果有值）
+                    const cellAddressK = XLSX.utils.encode_cell({ r: row, c: 10 });
+                    const diceHandValue = item.diceHand !== '' && item.diceHand !== null && item.diceHand !== undefined ? item.diceHand : '';
+                    sheet[cellAddressK] = { v: diceHandValue, t: 's' };
+                    
+                    // L列（索引11）填入prop（道具掉落，如果有值）
+                    const cellAddressL = XLSX.utils.encode_cell({ r: row, c: 11 });
+                    const propValue = item.prop !== '' && item.prop !== null && item.prop !== undefined ? item.prop : '';
+                    sheet[cellAddressL] = { v: propValue, t: 's' };
+                    
+                    // M列（索引12）填入enemyExp（单怪掉落经验值，如果有值）
+                    const cellAddressM = XLSX.utils.encode_cell({ r: row, c: 12 });
+                    const enemyExpValue = item.enemyExp !== '' && item.enemyExp !== null && item.enemyExp !== undefined ? item.enemyExp : '';
+                    sheet[cellAddressM] = { v: enemyExpValue, t: typeof enemyExpValue === 'number' ? 'n' : 's' };
+                    
+                    // N列（索引13）填入stageExp（过关经验值）
+                    const cellAddressN = XLSX.utils.encode_cell({ r: row, c: 13 });
+                    sheet[cellAddressN] = { v: item.stageExp || '', t: typeof item.stageExp === 'number' ? 'n' : 's' };
+                });
+            }
+            
+            // 设置范围
+            const maxRow = Math.max(4, 5 + (battleData ? battleData.length - 1 : 0));
+            sheet['!ref'] = XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: maxRow, c: 13 } });
+            
+            return sheet;
+        }
+
+        // 创建group_id sheet页
+        function createGroupSheet(chapterId, groupData) {
+            const sheet = XLSX.utils.aoa_to_sheet([]);
+            
+            // 设置前5行的固定值
+            const headerData = [
+                ['##var', '##var', '##var', '##var', '##var', '##var', '##var', '##var', '##var', '##var'], // 第1行
+                ['##var', 'id', 'groupId', 'enemy', 'position', 'start', 'passiveSkill', 'hpTimes', 'atkTimes', 'skillOrder'], // 第2行
+                ['##type', 'int', 'int', 'temp.EEnemy', 'int', '(array#sep=*),int', '(array#sep=*),int', '(array#sep=*),float', '(array#sep=*),float', '(array#sep=*),temp.EEnemyBehavior'], // 第3行
+                ['##group', 'c,s', 'c,s', 'c,s', 'c,s', 'c,s', 'c,s', 'c,s', 'c,s', 'c,s'], // 第4行
+                ['##', '唯一ID', '敌人组ID', '敌人ID', '站位', '怪物初始状态', '常驻被动技能', '标准血量倍率范围', '标准攻击力倍率范围', '技能顺序'] // 第5行
+            ];
+            
+            // 写入表头（前5行）
+            for (let row = 0; row < 5; row++) {
+                for (let col = 0; col < 10; col++) {
+                    const cellAddress = XLSX.utils.encode_cell({ r: row, c: col });
+                    const value = headerData[row][col] || '';
+                    sheet[cellAddress] = { v: value, t: 's' };
+                }
+            }
+            
+            // 从groupData填充数据（从第6行开始，索引5）
+            if (groupData && groupData.length > 0) {
+                groupData.forEach((item, index) => {
+                    const row = 5 + index;
+                    
+                    // B列（索引1）填入id（唯一ID）
+                    const cellAddressB = XLSX.utils.encode_cell({ r: row, c: 1 });
+                    sheet[cellAddressB] = { v: item.uniqueId || '', t: typeof item.uniqueId === 'number' ? 'n' : 's' };
+                    
+                    // C列（索引2）填入groupId（敌人组ID）
+                    const cellAddressC = XLSX.utils.encode_cell({ r: row, c: 2 });
+                    sheet[cellAddressC] = { v: item.enemyGroupId || '', t: typeof item.enemyGroupId === 'number' ? 'n' : 's' };
+                    
+                    // D列（索引3）填入enemy（敌人ID）
+                    const cellAddressD = XLSX.utils.encode_cell({ r: row, c: 3 });
+                    sheet[cellAddressD] = { v: item.enemyId || '', t: 's' };
+                    
+                    // E列（索引4）填入position（站位）
+                    const cellAddressE = XLSX.utils.encode_cell({ r: row, c: 4 });
+                    sheet[cellAddressE] = { v: item.position || '', t: typeof item.position === 'number' ? 'n' : 's' };
+                    
+                    // F列（索引5）填入start（怪物初始状态）
+                    const cellAddressF = XLSX.utils.encode_cell({ r: row, c: 5 });
+                    sheet[cellAddressF] = { v: item.start || '', t: 's' };
+                    
+                    // G列（索引6）填入passiveSkill（常驻被动技能）
+                    const cellAddressG = XLSX.utils.encode_cell({ r: row, c: 6 });
+                    sheet[cellAddressG] = { v: item.passiveSkill || '', t: 's' };
+                    
+                    // H列（索引7）填入hpTimes（标准血量倍率范围）
+                    const cellAddressH = XLSX.utils.encode_cell({ r: row, c: 7 });
+                    sheet[cellAddressH] = { v: item.hpTimes || '', t: 's' };
+                    
+                    // I列（索引8）填入atkTimes（标准攻击力倍率范围）
+                    const cellAddressI = XLSX.utils.encode_cell({ r: row, c: 8 });
+                    sheet[cellAddressI] = { v: item.atkTimes || '', t: 's' };
+                    
+                    // J列（索引9）填入skillOrder（技能顺序）
+                    const cellAddressJ = XLSX.utils.encode_cell({ r: row, c: 9 });
+                    sheet[cellAddressJ] = { v: item.skillOrder || '', t: 's' };
+                });
+            }
+            
+            // 设置范围
+            const maxRow = Math.max(4, 5 + (groupData ? groupData.length - 1 : 0));
+            sheet['!ref'] = XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: maxRow, c: 9 } });
+            
+            return sheet;
+        }
+
+        // 第三部分：按章节导出文件
+        function exportFiles() {
+            if (!globalGeneratedData || !globalPlanData || !workbookData) {
+                alert('请先处理数据（步骤2）');
+                return;
+            }
+
+            // 获取导出选项
+            const exportOption = document.querySelector('input[name="exportOption"]:checked');
+            const exportType = exportOption ? exportOption.value : 'all';
+            
+            // 获取"关卡规划总"数据
+            const planData = globalPlanData.data;
+            const headerRow = globalPlanData.headerRow;
+            
+            // 查找列索引
+            let chapterColIndex = -1;
+            let stageSeqColIndex = -1;
+            let stageTypeColIndex = -1;
+            let bossEliteColIndex = -1;
+            let randomEventColIndex = -1;
+            let firstRandomEventColIndex = -1;
+            let standardHpColIndex = -1;
+            let standardAtkColIndex = -1;
+            let diceHandColIndex = -1;
+            let propColIndex = -1;
+            let enemyExpColIndex = -1;
+            
+            // 先输出所有列名用于调试
+            console.log('关卡规划总的所有列名:', headerRow.map((h, idx) => `${idx}: ${h}`));
+            
+            for (let i = 0; i < headerRow.length; i++) {
+                const header = String(headerRow[i]).trim();
+                if (header.includes('章节') || header === '章节') {
+                    chapterColIndex = i;
+                }
+                if (header.includes('小关序号') || header === '小关序号' || (header.includes('序号') && !header.includes('唯一'))) {
+                    stageSeqColIndex = i;
+                }
+                if (header.includes('关卡类型') || header === '关卡类型' || header.includes('类型')) {
+                    stageTypeColIndex = i;
+                }
+                if (header.includes('boss和精英') || header === 'boss和精英' || (header.includes('boss') && header.includes('精英'))) {
+                    bossEliteColIndex = i;
+                }
+                // 查找"随机事件(规划)"列，支持多种可能的列名
+                // 优先精确匹配，然后模糊匹配
+                if (header === '随机事件(规划)' || 
+                    header === '随机事件（规划）' ||  // 支持中文括号
+                    header.includes('随机事件(规划)') || 
+                    header.includes('随机事件（规划）') ||
+                    (header.includes('随机事件') && header.includes('规划'))) {
+                    randomEventColIndex = i;
+                    console.log('找到"随机事件(规划)"列，索引:', i, '列名:', header);
+                } else if (randomEventColIndex === -1 && header === '随机事件') {
+                    // 如果没有找到"随机事件(规划)"，则使用"随机事件"列
+                    randomEventColIndex = i;
+                    console.log('找到"随机事件"列（作为随机事件(规划)使用），索引:', i, '列名:', header);
+                }
+                if (header.includes('首次随机事件') || header === '首次随机事件') {
+                    firstRandomEventColIndex = i;
+                }
+                if (header.includes('标准血量') || header === '标准血量') {
+                    standardHpColIndex = i;
+                }
+                if (header.includes('标准攻击') || header === '标准攻击') {
+                    standardAtkColIndex = i;
+                }
+                if (header.includes('牌型概率') || header === '牌型概率') {
+                    diceHandColIndex = i;
+                }
+                if (header.includes('道具掉落') || header === '道具掉落') {
+                    propColIndex = i;
+                }
+                if (header.includes('单怪掉落经验值') || header === '单怪掉落经验值') {
+                    enemyExpColIndex = i;
+                }
+            }
+            
+            // 输出列索引查找结果
+            console.log('列索引查找结果:', {
+                chapterColIndex: chapterColIndex,
+                stageSeqColIndex: stageSeqColIndex,
+                stageTypeColIndex: stageTypeColIndex,
+                bossEliteColIndex: bossEliteColIndex,
+                randomEventColIndex: randomEventColIndex,
+                firstRandomEventColIndex: firstRandomEventColIndex
+            });
+            
+            if (chapterColIndex === -1 || stageSeqColIndex === -1) {
+                alert('未找到必要的列：章节、小关序号');
+                return;
+            }
+            
+            // 读取"怪物分布"sheet页
+            let monsterDistributionSheet = null;
+            let monsterDistributionData = null;
+            let monsterIdColIndex = -1;
+            let specialScaleColIndex = -1;
+            for (let sheetName of workbookData.SheetNames) {
+                if (sheetName.includes('怪物分布')) {
+                    monsterDistributionSheet = workbookData.Sheets[sheetName];
+                    monsterDistributionData = XLSX.utils.sheet_to_json(monsterDistributionSheet, { header: 1, defval: '' });
+                    if (monsterDistributionData.length > 0) {
+                        const distHeaderRow = monsterDistributionData[0];
+                        for (let i = 0; i < distHeaderRow.length; i++) {
+                            const header = String(distHeaderRow[i]).trim();
+                            if (header.includes('怪物id') || header === '怪物id' || header.includes('怪物ID')) {
+                                monsterIdColIndex = i;
+                            }
+                            if (header.includes('特殊缩放') || header === '特殊缩放') {
+                                specialScaleColIndex = i;
+                            }
+                        }
+                    }
+                    break;
+                }
+            }
+            
+            // 读取"随机事件"sheet页
+            let randomEventSheet = null;
+            let randomEventData = null;
+            let eventDistributionColIndex = -1;
+            let firstEventColIndex = -1;
+            for (let sheetName of workbookData.SheetNames) {
+                if (sheetName.includes('随机事件')) {
+                    randomEventSheet = workbookData.Sheets[sheetName];
+                    randomEventData = XLSX.utils.sheet_to_json(randomEventSheet, { header: 1, defval: '' });
+                    if (randomEventData.length > 0) {
+                        const eventHeaderRow = randomEventData[0];
+                        for (let i = 0; i < eventHeaderRow.length; i++) {
+                            const header = String(eventHeaderRow[i]).trim();
+                            if (header.includes('事件分布') || header === '事件分布') {
+                                eventDistributionColIndex = i;
+                            }
+                            if (header.includes('首次事件') || header === '首次事件') {
+                                firstEventColIndex = i;
+                            }
+                        }
+                    }
+                    break;
+                }
+            }
+            
+            // 创建怪物分布映射（boss和精英 -> 特殊缩放）
+            const bossEliteToSpecialScaleMap = new Map();
+            if (monsterDistributionData && monsterIdColIndex >= 0 && specialScaleColIndex >= 0) {
+                for (let row = 1; row < monsterDistributionData.length; row++) {
+                    const monsterId = monsterDistributionData[row][monsterIdColIndex];
+                    const specialScale = monsterDistributionData[row][specialScaleColIndex];
+                    if (monsterId !== '' && monsterId !== null && monsterId !== undefined) {
+                        // 同时支持字符串和数字格式的key
+                        const key = String(monsterId).trim();
+                        // 只有当specialScale有值时才添加到映射中
+                        if (specialScale !== '' && specialScale !== null && specialScale !== undefined) {
+                            bossEliteToSpecialScaleMap.set(key, String(specialScale).trim());
+                            // 如果是数字，也添加数字格式的key
+                            const numKey = Number(monsterId);
+                            if (!isNaN(numKey) && numKey.toString() !== key) {
+                                bossEliteToSpecialScaleMap.set(String(numKey), String(specialScale).trim());
+                            }
+                        }
+                    }
+                }
+                console.log('怪物分布映射已创建，共', bossEliteToSpecialScaleMap.size, '条记录');
+                // 输出前几条记录用于调试
+                if (bossEliteToSpecialScaleMap.size > 0) {
+                    const entries = Array.from(bossEliteToSpecialScaleMap.entries()).slice(0, 5);
+                    console.log('怪物分布映射示例（前5条）:', entries);
+                }
+            } else {
+                console.log('未找到怪物分布sheet页或列索引无效', {
+                    hasData: !!monsterDistributionData,
+                    monsterIdColIndex: monsterIdColIndex,
+                    specialScaleColIndex: specialScaleColIndex
+                });
+            }
+            
+            // 创建随机事件列表
+            const randomEventList = [];
+            if (randomEventData && eventDistributionColIndex >= 0 && firstEventColIndex >= 0) {
+                for (let row = 1; row < randomEventData.length; row++) {
+                    const eventDistribution = randomEventData[row][eventDistributionColIndex];
+                    const firstEvent = randomEventData[row][firstEventColIndex];
+                    if (eventDistribution !== '' && eventDistribution !== null && eventDistribution !== undefined) {
+                        randomEventList.push({
+                            eventDistribution: eventDistribution,
+                            firstEvent: firstEvent
+                        });
+                    }
+                }
+            }
+
+            // 提取唯一的章节ID
+            const chapterIds = new Set();
+            for (let row = 1; row < planData.length; row++) {
+                const val = planData[row][chapterColIndex];
+                if (val !== '' && val !== null && val !== undefined) {
+                    const numVal = Number(val);
+                    if (!isNaN(numVal) && numVal > 0) {
+                        chapterIds.add(numVal);
+                    }
+                }
+            }
+
+            let sortedChapterIds = Array.from(chapterIds).sort((a, b) => a - b);
+            
+            // 如果是单个章节导出，筛选章节ID
+            if (exportType === 'single') {
+                const singleChapterIdInput = document.getElementById('singleChapterId');
+                const singleChapterId = singleChapterIdInput ? Number(singleChapterIdInput.value) : null;
+                if (!singleChapterId || isNaN(singleChapterId) || singleChapterId <= 0) {
+                    alert('请输入有效的章节ID');
+                    return;
+                }
+                if (!chapterIds.has(singleChapterId)) {
+                    alert(`章节ID ${singleChapterId} 不存在`);
+                    return;
+                }
+                sortedChapterIds = [singleChapterId];
+            }
+
+            if (sortedChapterIds.length === 0) {
+                alert('未找到章节ID');
+                return;
+            }
+
+            // 为每个章节导出文件
+            sortedChapterIds.forEach((chapterId, index) => {
+                setTimeout(() => {
+                    // 筛选该章节的数据
+                    const chapterPlanData = [];
+                    for (let row = 1; row < planData.length; row++) {
+                        const val = planData[row][chapterColIndex];
+                        const numVal = Number(val);
+                        if (!isNaN(numVal) && numVal === chapterId) {
+                            const bossElite = bossEliteColIndex >= 0 ? planData[row][bossEliteColIndex] : '';
+                            let bossAnim = '';
+                            if (bossElite && bossElite !== '' && bossElite !== null && bossElite !== undefined) {
+                                const bossEliteStr = String(bossElite).trim();
+                                // 尝试多种格式查找
+                                bossAnim = bossEliteToSpecialScaleMap.get(bossEliteStr);
+                                if (!bossAnim) {
+                                    // 尝试数字格式
+                                    const numBossElite = Number(bossEliteStr);
+                                    if (!isNaN(numBossElite)) {
+                                        bossAnim = bossEliteToSpecialScaleMap.get(String(numBossElite));
+                                    }
+                                }
+                                if (!bossAnim) {
+                                    // 尝试原始值（不trim）
+                                    bossAnim = bossEliteToSpecialScaleMap.get(String(bossElite));
+                                }
+                                
+                                // 调试日志：当层ID为20时输出详细信息
+                                const stageSeq = planData[row][stageSeqColIndex];
+                                if (Number(stageSeq) === 20) {
+                                    console.log('层ID为20的BOSS虚影查找:', {
+                                        章节ID: chapterId,
+                                        小关序号: stageSeq,
+                                        bossElite原始值: bossElite,
+                                        bossElite类型: typeof bossElite,
+                                        bossElite字符串: bossEliteStr,
+                                        bossElite数字: Number(bossEliteStr),
+                                        查找结果: bossAnim,
+                                        映射中是否有字符串key: bossEliteToSpecialScaleMap.has(bossEliteStr),
+                                        映射中是否有数字key: bossEliteToSpecialScaleMap.has(String(Number(bossEliteStr))),
+                                        映射大小: bossEliteToSpecialScaleMap.size,
+                                        映射中所有key: Array.from(bossEliteToSpecialScaleMap.keys()).slice(0, 10)
+                                    });
+                                }
+                            }
+                            
+                            chapterPlanData.push({
+                                rowIndex: row,
+                                chapterId: chapterId,
+                                stageSeq: planData[row][stageSeqColIndex],
+                                stageType: stageTypeColIndex >= 0 ? planData[row][stageTypeColIndex] : '',
+                                bossElite: bossElite,
+                                bossAnim: bossAnim,
+                                randomEvent: randomEventColIndex >= 0 ? planData[row][randomEventColIndex] : '',
+                                firstRandomEvent: firstRandomEventColIndex >= 0 ? planData[row][firstRandomEventColIndex] : '',
+                                standardHp: standardHpColIndex >= 0 ? planData[row][standardHpColIndex] : '',
+                                standardAtk: standardAtkColIndex >= 0 ? planData[row][standardAtkColIndex] : '',
+                                diceHand: diceHandColIndex >= 0 ? planData[row][diceHandColIndex] : '',
+                                prop: propColIndex >= 0 ? planData[row][propColIndex] : '',
+                                enemyExp: enemyExpColIndex >= 0 ? planData[row][enemyExpColIndex] : '',
+                                rawRow: planData[row]
+                            });
+                        }
+                    }
+                    
+                    // 筛选该章节的怪物组数据
+                    const chapterGroupData = globalGeneratedData.filter(item => item.chapterId === chapterId);
+                    
+                    // 构建stage_id数据（逐行遍历，不去重）
+                    const stageData = [];
+                    chapterPlanData.forEach(item => {
+                        const stageSeq = Number(item.stageSeq);
+                        if (!isNaN(stageSeq)) {
+                            stageData.push({
+                                id: stageSeq,
+                                chapterId: chapterId,
+                                stage: stageSeq,
+                                stageType: item.stageType,
+                                bossAnim: item.bossAnim || ''
+                            });
+                        }
+                    });
+                    stageData.sort((a, b) => a.id - b.id);
+                    
+                    // 构建stageEvent_id数据（只处理关卡类型为4的行）
+                    const eventData = [];
+                    chapterPlanData.forEach(item => {
+                        const stageType = Number(item.stageType);
+                        if (stageType === 4) {
+                            const stageSeq = Number(item.stageSeq);
+                            if (!isNaN(stageSeq)) {
+                                let eventId = '';
+                                let eventFirst = '';
+                                
+                                // 如果"随机事件(规划)"列有值（字符串类型），使用该值填入"事件随机"列
+                                const randomEventValue = item.randomEvent;
+                                
+                                // 调试日志：当小关序号为3时输出详细信息
+                                if (stageSeq === 3) {
+                                    console.log('小关序号为3的随机事件查找:', {
+                                        章节ID: chapterId,
+                                        小关序号: stageSeq,
+                                        关卡类型: stageType,
+                                        randomEventValue原始值: randomEventValue,
+                                        randomEventValue类型: typeof randomEventValue,
+                                        randomEventValue是否为空: randomEventValue === '' || randomEventValue === null || randomEventValue === undefined,
+                                        randomEventColIndex: randomEventColIndex,
+                                        _debugRandomEventRaw: item._debugRandomEventRaw,
+                                        item完整数据: item
+                                    });
+                                }
+                                
+                                // 更严格的判断：确保值不为空且不是空字符串
+                                const hasRandomEventValue = randomEventValue !== '' && 
+                                                           randomEventValue !== null && 
+                                                           randomEventValue !== undefined &&
+                                                           String(randomEventValue).trim() !== '';
+                                
+                                if (hasRandomEventValue) {
+                                    // 确保是字符串类型
+                                    eventId = String(randomEventValue).trim();
+                                    // 如果"首次随机事件"列有值，使用该值填入"首次事件"列
+                                    const firstRandomEventValue = item.firstRandomEvent;
+                                    if (firstRandomEventValue && firstRandomEventValue !== '' && firstRandomEventValue !== null && firstRandomEventValue !== undefined) {
+                                        eventFirst = String(firstRandomEventValue).trim();
+                                    }
+                                    
+                                    // 调试日志
+                                    if (stageSeq === 3) {
+                                        console.log('使用随机事件(规划)列的值:', {
+                                            eventId: eventId,
+                                            firstRandomEventValue: firstRandomEventValue,
+                                            eventFirst: eventFirst
+                                        });
+                                    }
+                                } else {
+                                    // 如果"随机事件(规划)"列没有值，从"随机事件"sheet页中"事件分布"列所有数据中随机一个值
+                                    if (randomEventList.length > 0) {
+                                        const randomIndex = Math.floor(Math.random() * randomEventList.length);
+                                        const selectedEvent = randomEventList[randomIndex];
+                                        eventId = String(selectedEvent.eventDistribution).trim();
+                                        // 同时将该值对应的"首次事件"列的值填入"首次事件"列
+                                        eventFirst = String(selectedEvent.firstEvent || '').trim();
+                                        
+                                        // 调试日志
+                                        if (stageSeq === 3) {
+                                            console.log('从随机事件sheet页随机选择:', {
+                                                随机选择的值: eventId,
+                                                首次事件: eventFirst
+                                            });
+                                        }
+                                    }
+                                }
+                                
+                                eventData.push({
+                                    id: stageSeq,
+                                    eventId: eventId,
+                                    eventFirst: eventFirst
+                                });
+                            }
+                        }
+                    });
+                    eventData.sort((a, b) => a.id - b.id);
+                    
+                    // 构建stageBattle_id数据（逐行遍历）
+                    const battleData = [];
+                    chapterPlanData.forEach(item => {
+                        const stageSeq = Number(item.stageSeq);
+                        if (!isNaN(stageSeq)) {
+                            const group = stageSeq * 100 + 1;
+                            battleData.push({
+                                id: stageSeq,
+                                hp: item.standardHp || '',
+                                atk: item.standardAtk || '',
+                                firstHp: '',
+                                firstAtk: '',
+                                group: group,
+                                rogue: '',
+                                point: '',
+                                roll: '',
+                                diceHand: item.diceHand || '',
+                                prop: item.prop || '',
+                                enemyExp: item.enemyExp || '',
+                                stageExp: ''
+                            });
+                        }
+                    });
+                    battleData.sort((a, b) => a.id - b.id);
+                    
+                    // 构建group_id数据（从chapterGroupData）
+                    const groupData = chapterGroupData.map(item => ({
+                        uniqueId: item.uniqueId,
+                        enemyGroupId: item.enemyGroupId,
+                        enemyId: item.enemyId,
+                        position: item.position,
+                        start: '',
+                        passiveSkill: '',
+                        hpTimes: item.hpTimes,
+                        atkTimes: item.atkTimes,
+                        skillOrder: ''
+                    })).sort((a, b) => {
+                        // 先按enemyGroupId排序，再按uniqueId排序
+                        if (a.enemyGroupId !== b.enemyGroupId) {
+                            return a.enemyGroupId - b.enemyGroupId;
+                        }
+                        return a.uniqueId - b.uniqueId;
+                    });
+                    
+                    // 创建4个sheet页
+                    const stageSheet = createStageSheet(chapterId, stageData);
+                    const stageEventSheet = createStageEventSheet(chapterId, eventData);
+                    const stageBattleSheet = createStageBattleSheet(chapterId, battleData);
+                    const groupSheet = createGroupSheet(chapterId, groupData);
+                    
+                    // 创建新的工作簿
+                    const newWorkbook = XLSX.utils.book_new();
+                    XLSX.utils.book_append_sheet(newWorkbook, stageSheet, `stage_${chapterId}`);
+                    XLSX.utils.book_append_sheet(newWorkbook, stageEventSheet, `stageEvent_${chapterId}`);
+                    XLSX.utils.book_append_sheet(newWorkbook, stageBattleSheet, `stageBattle_${chapterId}`);
+                    XLSX.utils.book_append_sheet(newWorkbook, groupSheet, `group_${chapterId}`);
+
+                    const fileName = `第${chapterId}章.xlsx`;
+                    XLSX.writeFile(newWorkbook, fileName, { bookType: 'xlsx' });
+                }, index * 300);
+            });
+
+            const resultDiv = document.getElementById('exportResult');
+            resultDiv.innerHTML = `<strong>导出完成！</strong><br>已导出 ${sortedChapterIds.length} 个文件`;
+            resultDiv.style.display = 'block';
+        }
+
+        // 导出怪物组（带版本号）
+        function exportMonsterGroup() {
+            if (!processedWorkbook) {
+                alert('请先处理数据（步骤2）');
+                return;
+            }
+            
+            // 找到"怪物组"sheet页
+            let monsterGroupSheet = null;
+            let monsterGroupSheetName = null;
+            for (let sheetName of processedWorkbook.SheetNames) {
+                if (sheetName.includes('怪物组')) {
+                    monsterGroupSheet = processedWorkbook.Sheets[sheetName];
+                    monsterGroupSheetName = sheetName;
+                    break;
+                }
+            }
+            
+            if (!monsterGroupSheet) {
+                alert('未找到"怪物组"sheet页');
+                return;
+            }
+            
+            // 创建新的工作簿，只包含"怪物组"sheet页
+            const newWorkbook = XLSX.utils.book_new();
+            const jsonData = XLSX.utils.sheet_to_json(monsterGroupSheet, { header: 1, defval: '', raw: false });
+            const newSheet = XLSX.utils.aoa_to_sheet(jsonData);
+            XLSX.utils.book_append_sheet(newWorkbook, newSheet, monsterGroupSheetName);
+            
+            const fileName = `怪物组_v${VERSION}.xlsx`;
+            XLSX.writeFile(newWorkbook, fileName, { bookType: 'xlsx' });
+            
+            const resultDiv = document.getElementById('exportResult');
+            resultDiv.innerHTML = `<strong>导出完成！</strong><br>已导出文件：${fileName}`;
+            resultDiv.style.display = 'block';
+        }
+
+        // 生成章节文件（旧函数，保留备用）
+        function generateChapterFiles() {
+            if (!workbookData) {
+                alert('请先上传文件');
+                return;
+            }
+            
+            const chapterIdCol = document.getElementById('chapterIdCol').value;
+            if (!chapterIdCol) {
+                alert('请指定章节ID列');
+                return;
+            }
+            
+            // 找到章节总sheet页
+            let chapterSheet = null;
+            for (let sheetName of workbookData.SheetNames) {
+                if (sheetName.includes('章节总') || sheetName.includes('总表')) {
+                    chapterSheet = workbookData.Sheets[sheetName];
+                    break;
+                }
+            }
+            
+            if (!chapterSheet && workbookData.SheetNames.length > 0) {
+                chapterSheet = workbookData.Sheets[workbookData.SheetNames[0]];
+            }
+            
+            if (!chapterSheet) {
+                alert('找不到章节总表');
+                return;
+            }
+            
+            // 提取章节ID列表
+            const chapterIds = extractChapterIds(chapterSheet, chapterIdCol);
+            
+            if (chapterIds.length === 0) {
+                alert('未找到章节ID');
+                return;
+            }
+            
+            // 获取关卡规划总sheet页名称
+            const stagePlanSheetName = document.getElementById('stagePlanSheet').value || 
+                (workbookData.SheetNames.find(name => name.includes('关卡规划总') || name.includes('规划总') || name.includes('关卡')) || '');
+            
+            // 为每个章节ID生成文件
+            chapterIds.forEach((chapterId, index) => {
+                setTimeout(() => {
+                    const newWorkbook = XLSX.utils.book_new();
+                    
+                    // 获取stage数据
+                    const stageData = getStageDataFromPlanSheet(chapterId);
+                    
+                    // 创建4个sheet页
+                    const stageSheet = createStageSheet(chapterId, stageData);
+                    const stageEventSheet = createStageEventSheet(chapterId);
+                    const stageBattleSheet = createStageBattleSheet(chapterId);
+                    const groupSheet = createGroupSheet(chapterId);
+                    
+                    // 添加sheet页到工作簿
+                    XLSX.utils.book_append_sheet(newWorkbook, stageSheet, `stage_${chapterId}`);
+                    XLSX.utils.book_append_sheet(newWorkbook, stageEventSheet, `stageEvent_${chapterId}`);
+                    XLSX.utils.book_append_sheet(newWorkbook, stageBattleSheet, `stageBattle_${chapterId}`);
+                    XLSX.utils.book_append_sheet(newWorkbook, groupSheet, `group_${chapterId}`);
+                    
+                    // 生成文件名
+                    const fileName = `第${chapterId}章.xlsm`;
+                    
+                    // 下载文件
+                    XLSX.writeFile(newWorkbook, fileName, { bookType: 'xlsm' });
+                    
+                    // 在新窗口中显示文件内容
+                    displayGeneratedFile(newWorkbook, fileName, chapterId);
+                    
+                }, index * 500); // 延迟生成，避免浏览器阻止多个下载
+            });
+            
+            alert(`正在生成 ${chapterIds.length} 个章节文件...\n文件将在新窗口中显示。`);
+        }
+
+        // 在新窗口中显示生成的文件
+        function displayGeneratedFile(workbook, fileName, chapterId) {
+            const newWindow = window.open('', `第${chapterId}章`, 'width=1400,height=800,scrollbars=yes');
+            
+            if (!newWindow) {
+                alert('无法打开新窗口，请允许弹出窗口');
+                return;
+            }
+            
+            // 准备所有sheet的数据
+            const allSheetsData = {};
+            workbook.SheetNames.forEach(sheetName => {
+                allSheetsData[sheetName] = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { header: 1, defval: '' });
+            });
+            
+            // 使用Blob和URL.createObjectURL创建HTML文件
+            const htmlParts = [];
+            htmlParts.push('<!DOCTYPE html>');
+            htmlParts.push('<html lang="zh-CN">');
+            htmlParts.push('<head>');
+            htmlParts.push('<meta charset="UTF-8">');
+            htmlParts.push('<title>' + fileName.replace(/</g, '&lt;').replace(/>/g, '&gt;') + '</title>');
+            htmlParts.push('<style>');
+            htmlParts.push('* { margin: 0; padding: 0; box-sizing: border-box; }');
+            htmlParts.push('body { font-family: "Microsoft YaHei", Arial, sans-serif; margin: 20px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; }');
+            htmlParts.push('.container { max-width: 1400px; margin: 0 auto; background: white; border-radius: 15px; padding: 30px; box-shadow: 0 10px 40px rgba(0,0,0,0.2); }');
+            htmlParts.push('h1 { color: #667eea; margin-bottom: 20px; padding-bottom: 15px; border-bottom: 2px solid #e9ecef; }');
+            htmlParts.push('.sheet-tabs { display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; }');
+            htmlParts.push('.sheet-tab { padding: 10px 20px; background: #f0f0f0; border-radius: 8px; cursor: pointer; border: 2px solid transparent; transition: all 0.3s; font-weight: 500; }');
+            htmlParts.push('.sheet-tab:hover { background: #e0e0e0; }');
+            htmlParts.push('.sheet-tab.active { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; }');
+            htmlParts.push('.table-wrapper { overflow: auto; max-height: 600px; border: 2px solid #ddd; border-radius: 8px; }');
+            htmlParts.push('table { border-collapse: collapse; width: 100%; font-size: 0.9em; min-width: 100%; }');
+            htmlParts.push('th, td { border: 1px solid #dee2e6; padding: 8px; text-align: left; white-space: nowrap; }');
+            htmlParts.push('th { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; position: sticky; top: 0; z-index: 10; font-weight: 600; }');
+            htmlParts.push('th:first-child { position: sticky; left: 0; z-index: 11; background: linear-gradient(135deg, #5568d3 0%, #653a92 100%); }');
+            htmlParts.push('td:first-child { position: sticky; left: 0; background: #f8f9fa; font-weight: 600; z-index: 9; text-align: center; }');
+            htmlParts.push('tr:nth-child(even) { background: #f8f9fa; }');
+            htmlParts.push('tr:hover { background: #e7f3ff; }');
+            htmlParts.push('.row-header { background: #6c757d !important; color: white !important; min-width: 50px; text-align: center !important; }');
+            htmlParts.push('</style>');
+            htmlParts.push('</head>');
+            htmlParts.push('<body>');
+            htmlParts.push('<div class="container">');
+            htmlParts.push('<h1>📄 ' + fileName.replace(/</g, '&lt;').replace(/>/g, '&gt;') + '</h1>');
+            htmlParts.push('<div class="sheet-tabs" id="sheetTabs"></div>');
+            htmlParts.push('<div id="tableContainer"></div>');
+            htmlParts.push('</div>');
+            htmlParts.push('<script>');
+            htmlParts.push('var allSheetsData = ' + JSON.stringify(allSheetsData).replace(/</g, '\\u003c').replace(/>/g, '\\u003e') + ';');
+            htmlParts.push('var sheetNames = ' + JSON.stringify(workbook.SheetNames).replace(/</g, '\\u003c').replace(/>/g, '\\u003e') + ';');
+            htmlParts.push('function escapeHtml(text) {');
+            htmlParts.push('    var div = document.createElement("div");');
+            htmlParts.push('    div.textContent = text;');
+            htmlParts.push('    return div.innerHTML;');
+            htmlParts.push('}');
+            htmlParts.push('function getExcelColumnName(colIndex) {');
+            htmlParts.push('    var result = "";');
+            htmlParts.push('    while (colIndex >= 0) {');
+            htmlParts.push('        result = String.fromCharCode(65 + (colIndex % 26)) + result;');
+            htmlParts.push('        colIndex = Math.floor(colIndex / 26) - 1;');
+            htmlParts.push('    }');
+            htmlParts.push('    return result;');
+            htmlParts.push('}');
+            htmlParts.push('function renderSheet(sheetName) {');
+            htmlParts.push('    var data = allSheetsData[sheetName] || [];');
+            htmlParts.push('    if (data.length === 0) {');
+            htmlParts.push('        document.getElementById("tableContainer").innerHTML = "<p>此sheet页无数据</p>";');
+            htmlParts.push('        return;');
+            htmlParts.push('    }');
+            htmlParts.push('    var html = "<div class=\'table-wrapper\'><table><thead><tr>";');
+            htmlParts.push('    html += "<th class=\'row-header\'>行/列</th>";');
+            htmlParts.push('    var maxCols = 0;');
+            htmlParts.push('    for (var i = 0; i < data.length; i++) {');
+            htmlParts.push('        if (data[i].length > maxCols) maxCols = data[i].length;');
+            htmlParts.push('    }');
+            htmlParts.push('    for (var col = 0; col < maxCols; col++) {');
+            htmlParts.push('        var colName = getExcelColumnName(col);');
+            htmlParts.push('        html += "<th>" + escapeHtml(colName) + "</th>";');
+            htmlParts.push('    }');
+            htmlParts.push('    html += "</tr></thead><tbody>";');
+            htmlParts.push('    for (var row = 0; row < data.length; row++) {');
+            htmlParts.push('        html += "<tr>";');
+            htmlParts.push('        html += "<td class=\'row-header\'>" + (row + 1) + "</td>";');
+            htmlParts.push('        for (var col = 0; col < maxCols; col++) {');
+            htmlParts.push('            var cellValue = data[row][col] !== undefined ? data[row][col] : "";');
+            htmlParts.push('            var displayValue = cellValue === "" ? "&nbsp;" : escapeHtml(String(cellValue));');
+            htmlParts.push('            html += "<td>" + displayValue + "</td>";');
+            htmlParts.push('        }');
+            htmlParts.push('        html += "</tr>";');
+            htmlParts.push('    }');
+            htmlParts.push('    html += "</tbody></table></div>";');
+            htmlParts.push('    document.getElementById("tableContainer").innerHTML = html;');
+            htmlParts.push('}');
+            htmlParts.push('sheetNames.forEach(function(name, index) {');
+            htmlParts.push('    var tab = document.createElement("div");');
+            htmlParts.push('    tab.className = "sheet-tab" + (index === 0 ? " active" : "");');
+            htmlParts.push('    tab.textContent = name;');
+            htmlParts.push('    tab.onclick = function() {');
+            htmlParts.push('        var tabs = document.querySelectorAll(".sheet-tab");');
+            htmlParts.push('        for (var i = 0; i < tabs.length; i++) {');
+            htmlParts.push('            tabs[i].classList.remove("active");');
+            htmlParts.push('        }');
+            htmlParts.push('        tab.classList.add("active");');
+            htmlParts.push('        renderSheet(name);');
+            htmlParts.push('    };');
+            htmlParts.push('    document.getElementById("sheetTabs").appendChild(tab);');
+            htmlParts.push('});');
+            htmlParts.push('if (sheetNames.length > 0) {');
+            htmlParts.push('    renderSheet(sheetNames[0]);');
+            htmlParts.push('}');
+            htmlParts.push('</' + 'script>');
+            htmlParts.push('</body>');
+            htmlParts.push('</html>');
+            
+            const htmlContent = htmlParts.join('\n');
+            newWindow.document.write(htmlContent);
+            newWindow.document.close();
+        }
+
+        // 清除文件
+        function clearFile() {
+            if (confirm('确定要清除当前文件吗？')) {
+                workbook = null;
+                workbookData = null;
+                currentSheetName = null;
+                fileInput.value = '';
+                fileInfo.classList.remove('show');
+                controls.classList.remove('show');
+                if (stepControls) {
+                    stepControls.classList.remove('show');
+                }
+                displaySection.classList.remove('show');
+                uploadArea.classList.remove('dragover');
+            }
+        }
+    </script>
+</body>
+</html>
+
