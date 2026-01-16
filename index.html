@@ -3318,6 +3318,50 @@
                 return;
             }
 
+            // 读取"章节总"sheet页，建立章节ID到"敌人防御"的映射
+            let chapterDefenseMap = {}; // 章节ID到敌人防御的映射
+            let chapterTotalSheet = null;
+            for (let sheetName of workbookData.SheetNames) {
+                if (sheetName.includes('章节总') || sheetName.includes('总表')) {
+                    chapterTotalSheet = workbookData.Sheets[sheetName];
+                    break;
+                }
+            }
+            
+            if (chapterTotalSheet) {
+                const chapterTotalData = XLSX.utils.sheet_to_json(chapterTotalSheet, { header: 1, defval: '' });
+                if (chapterTotalData.length > 0) {
+                    const chapterTotalHeader = chapterTotalData[0];
+                    let chapterIdColInTotal = -1; // 章节总中的章节ID列
+                    let defenseColInTotal = -1; // 章节总中的敌人防御列
+                    
+                    for (let i = 0; i < chapterTotalHeader.length; i++) {
+                        const header = String(chapterTotalHeader[i] || '').trim();
+                        const headerLower = header.toLowerCase();
+                        if ((header.includes('章节') && header.includes('ID')) || headerLower.includes('章节id') || header === '章节ID' || header === '章节id') {
+                            chapterIdColInTotal = i;
+                        }
+                        if (header.includes('敌人防御') || header === '敌人防御' || (header.includes('防御') && !header.includes('标准'))) {
+                            defenseColInTotal = i;
+                        }
+                    }
+                    
+                    // 如果找到了章节ID列和敌人防御列，建立映射关系
+                    if (chapterIdColInTotal >= 0 && defenseColInTotal >= 0) {
+                        for (let row = 1; row < chapterTotalData.length; row++) {
+                            const chapterId = chapterTotalData[row][chapterIdColInTotal];
+                            const defense = chapterTotalData[row][defenseColInTotal];
+                            if (chapterId !== '' && chapterId !== null && chapterId !== undefined) {
+                                const numChapterId = Number(chapterId);
+                                if (!isNaN(numChapterId)) {
+                                    chapterDefenseMap[numChapterId] = defense !== '' && defense !== null && defense !== undefined ? defense : '';
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            
             // 为每个章节导出文件
             sortedChapterIds.forEach((chapterId, index) => {
                 setTimeout(() => {
@@ -3459,6 +3503,8 @@
                     // ========== 构建stageBattle_id数据 ==========
                     // 对"关卡规划总"中对应章节id的"章节"列内容逐行遍历
                     const battleData = [];
+                    // 从"章节总"中获取该章节的"敌人防御"值
+                    const chapterDefense = chapterDefenseMap[chapterId] || '';
                     chapterPlanData.forEach(item => {
                         const stageSeq = Number(item.stageSeq);
                         if (!isNaN(stageSeq)) {
@@ -3467,7 +3513,7 @@
                                 id: stageSeq,                          // 层ID：从"小关序号"列
                                 hp: item.standardHp || '',            // 标准血量：从"标准血量"列
                                 atk: item.standardAtk || '',          // 标准攻击力：从"标准攻击"列
-                                def: item.standardDef || '',          // 标准防御力：从"标准防御"列
+                                def: chapterDefense || '',             // 标准防御力：从"章节总"的"敌人防御"列
                                 firstHp: '',                          // 第一次血量（空）
                                 firstAtk: '',                         // 第一次攻击力（空）
                                 group: group,                          // 随机敌人组：小关序号*100+1
