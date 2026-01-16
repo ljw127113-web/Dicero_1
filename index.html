@@ -464,6 +464,7 @@
                                 </div>
                             </div>
                             <button class="btn btn-primary" onclick="processData()">处理数据</button>
+                            <button class="btn btn-secondary" onclick="replaceSpecialTagMonsters()" style="margin-left: 10px;" id="replaceSpecialTagBtn" disabled>替换特殊标签怪</button>
                             <div id="processResult" style="margin-top: 15px; padding: 10px; background: white; border-radius: 5px; display: none;"></div>
                         </div>
                         <div id="processedDataDisplay" style="display: none;">
@@ -1993,6 +1994,577 @@
 
             // 显示处理后的数据预览
             displayProcessedData(processedWorkbook);
+            
+            // 启用"替换特殊标签怪"按钮
+            const replaceBtn = document.getElementById('replaceSpecialTagBtn');
+            if (replaceBtn) {
+                replaceBtn.disabled = false;
+            }
+        }
+        
+        // 替换特殊标签怪
+        function replaceSpecialTagMonsters() {
+            if (!globalGeneratedData || globalGeneratedData.length === 0) {
+                alert('请先处理数据（步骤2）');
+                return;
+            }
+            
+            if (!workbookData) {
+                alert('请先上传文件');
+                return;
+            }
+            
+            // 查找"章节总"sheet页
+            let chapterTotalSheet = null;
+            for (let sheetName of workbookData.SheetNames) {
+                if (sheetName.includes('章节总') || sheetName.includes('总表')) {
+                    chapterTotalSheet = workbookData.Sheets[sheetName];
+                    break;
+                }
+            }
+            
+            if (!chapterTotalSheet) {
+                alert('未找到"章节总"sheet页');
+                return;
+            }
+            
+            // 读取"章节总"数据
+            const chapterTotalData = XLSX.utils.sheet_to_json(chapterTotalSheet, { header: 1, defval: '' });
+            if (chapterTotalData.length === 0) {
+                alert('"章节总"sheet页为空');
+                return;
+            }
+            
+            // 查找列索引
+            const chapterTotalHeader = chapterTotalData[0];
+            let chapterIdColInTotal = -1; // 章节总中的章节ID列
+            let specialTagCountColInTotal = -1; // 章节总中的特殊标签怪数量列
+            let specialTagMonsterColInTotal = -1; // 章节总中的特殊标签怪列
+            
+            for (let i = 0; i < chapterTotalHeader.length; i++) {
+                const header = String(chapterTotalHeader[i] || '').trim();
+                const headerLower = header.toLowerCase();
+                if ((header.includes('章节') && header.includes('ID')) || headerLower.includes('章节id') || header === '章节ID' || header === '章节id') {
+                    chapterIdColInTotal = i;
+                }
+                if (header.includes('特殊标签怪数量') || header === '特殊标签怪数量' || (header.includes('特殊标签') && header.includes('数量'))) {
+                    specialTagCountColInTotal = i;
+                }
+                if (header.includes('特殊标签怪') && !header.includes('数量') || header === '特殊标签怪') {
+                    specialTagMonsterColInTotal = i;
+                }
+            }
+            
+            if (chapterIdColInTotal === -1) {
+                alert('未找到"章节总"中的"章节ID"列');
+                return;
+            }
+            
+            if (specialTagCountColInTotal === -1) {
+                alert('未找到"章节总"中的"特殊标签怪数量"列');
+                return;
+            }
+            
+            if (specialTagMonsterColInTotal === -1) {
+                alert('未找到"章节总"中的"特殊标签怪"列');
+                return;
+            }
+            
+            // 建立章节ID到特殊标签怪数量和特殊标签怪的映射
+            const chapterSpecialTagCountMap = {}; // 章节ID到特殊标签怪数量的映射
+            const chapterSpecialTagMonsterMap = {}; // 章节ID到特殊标签怪的映射
+            
+            for (let row = 1; row < chapterTotalData.length; row++) {
+                const chapterId = chapterTotalData[row][chapterIdColInTotal];
+                const specialTagCount = chapterTotalData[row][specialTagCountColInTotal];
+                const specialTagMonster = chapterTotalData[row][specialTagMonsterColInTotal];
+                
+                if (chapterId !== '' && chapterId !== null && chapterId !== undefined) {
+                    const numChapterId = Number(chapterId);
+                    if (!isNaN(numChapterId)) {
+                        // 严格检查：如果为空、null、undefined或0，则设为0或空字符串
+                        const countValue = specialTagCount !== '' && specialTagCount !== null && specialTagCount !== undefined ? Number(specialTagCount) : 0;
+                        const monsterValue = specialTagMonster !== '' && specialTagMonster !== null && specialTagMonster !== undefined ? String(specialTagMonster).trim() : '';
+                        chapterSpecialTagCountMap[numChapterId] = isNaN(countValue) || countValue <= 0 ? 0 : countValue;
+                        chapterSpecialTagMonsterMap[numChapterId] = monsterValue;
+                    }
+                }
+            }
+            
+            // 对每个章节进行替换
+            const chapterIds = [...new Set(globalGeneratedData.map(item => item.chapterId).filter(id => id !== null && id !== undefined))];
+            let totalReplaced = 0;
+            
+            console.log('=== 开始替换特殊标签怪 ===');
+            console.log('章节ID列表:', chapterIds);
+            console.log('章节特殊标签怪数量映射:', chapterSpecialTagCountMap);
+            console.log('章节特殊标签怪映射:', chapterSpecialTagMonsterMap);
+            
+            chapterIds.forEach(chapterId => {
+                const numChapterId = Number(chapterId);
+                if (isNaN(numChapterId)) return;
+                
+                console.log(`\n--- 处理章节 ${numChapterId} ---`);
+                
+                // 获取该章节的特殊标签怪数量和特殊标签怪
+                const specialTagCount = chapterSpecialTagCountMap[numChapterId];
+                const specialTagMonster = chapterSpecialTagMonsterMap[numChapterId];
+                
+                console.log(`章节 ${numChapterId} - 特殊标签怪数量:`, specialTagCount, '特殊标签怪:', specialTagMonster);
+                
+                // 如果章节总中对应章节id行的"特殊标签怪"或"特殊标签数量"为空或为0，则本章节怪物id不进行替换
+                if (!specialTagCount || specialTagCount <= 0 || !specialTagMonster || specialTagMonster === '') {
+                    console.log(`章节 ${numChapterId} - 跳过：特殊标签怪数量或值为空`);
+                    return; // 跳过没有特殊标签怪的章节
+                }
+                
+                // 1. 筛选同章节id、关卡类型为1、小关序号不为1的敌人ID
+                // 2. 每个章节id下小关序号为1的敌人ID不进行替换（通过筛选条件排除）
+                const candidates = [];
+                globalGeneratedData.forEach((item, index) => {
+                    if (Number(item.chapterId) === numChapterId && 
+                        Number(item.stageType) === 1 && 
+                        Number(item.stageSeq) !== 1) {
+                        candidates.push({
+                            index: index, // 在globalGeneratedData中的索引
+                            item: item
+                        });
+                    }
+                });
+                
+                console.log(`章节 ${numChapterId} - 符合条件的候选数量:`, candidates.length);
+                if (candidates.length > 0) {
+                    console.log(`章节 ${numChapterId} - 前5个候选示例:`, candidates.slice(0, 5).map(c => ({
+                        index: c.index,
+                        uniqueId: c.item.uniqueId,
+                        enemyId: c.item.enemyId,
+                        stageSeq: c.item.stageSeq,
+                        stageType: c.item.stageType
+                    })));
+                }
+                
+                if (candidates.length === 0) {
+                    console.log(`章节 ${numChapterId} - 没有符合条件的候选`);
+                    return; // 没有符合条件的候选
+                }
+                
+                // 如果需要的数量大于候选数量，则只替换候选数量
+                const actualReplaceCount = Math.min(specialTagCount, candidates.length);
+                console.log(`章节 ${numChapterId} - 需要替换数量:`, specialTagCount, '实际可替换数量:', actualReplaceCount);
+                
+                // 按uniqueId排序，确保顺序一致（uniqueId代表行号）
+                candidates.sort((a, b) => a.item.uniqueId - b.item.uniqueId);
+                
+                // 3. 随机选择要替换的敌人ID，确保行号差（uniqueId差）>3
+                // 例如被随机替换的两个敌人ID的行号不能是222和225，行号差必须大于3
+                const selectedIndices = [];
+                const maxAttempts = 5000; // 增加最大尝试次数，提高成功率
+                let attempts = 0;
+                
+                // 使用洗牌算法打乱候选列表，然后按顺序选择满足条件的项
+                const shuffledCandidates = [...candidates].sort(() => Math.random() - 0.5);
+                
+                for (let candidate of shuffledCandidates) {
+                    if (selectedIndices.length >= actualReplaceCount) break;
+                    
+                    const candidateUniqueId = candidate.item.uniqueId;
+                    
+                    // 检查行号差（uniqueId差）是否>3
+                    let canAdd = true;
+                    for (let selectedIdx of selectedIndices) {
+                        const selectedCandidate = candidates.find(c => c.index === selectedIdx);
+                        if (selectedCandidate) {
+                            const diff = Math.abs(candidateUniqueId - selectedCandidate.item.uniqueId);
+                            if (diff <= 3) {
+                                canAdd = false;
+                                break;
+                            }
+                        }
+                    }
+                    
+                    if (canAdd && !selectedIndices.includes(candidate.index)) {
+                        selectedIndices.push(candidate.index);
+                    }
+                    
+                    attempts++;
+                    if (attempts >= maxAttempts) break;
+                }
+                
+                console.log(`章节 ${numChapterId} - 第一轮选择后，选中数量:`, selectedIndices.length, '目标数量:', actualReplaceCount);
+                
+                // 如果仍然无法满足要求，尝试更宽松的策略：逐步降低行号差要求
+                if (selectedIndices.length < actualReplaceCount) {
+                    console.log(`章节 ${numChapterId} - 尝试更宽松的策略，当前选中:`, selectedIndices.length);
+                    const remainingCandidates = candidates.filter(c => !selectedIndices.includes(c.index));
+                    for (let minDiff = 3; minDiff >= 1 && selectedIndices.length < actualReplaceCount; minDiff--) {
+                        for (let candidate of remainingCandidates) {
+                            if (selectedIndices.length >= actualReplaceCount) break;
+                            
+                            const candidateUniqueId = candidate.item.uniqueId;
+                            let canAdd = true;
+                            for (let selectedIdx of selectedIndices) {
+                                const selectedCandidate = candidates.find(c => c.index === selectedIdx);
+                                if (selectedCandidate) {
+                                    const diff = Math.abs(candidateUniqueId - selectedCandidate.item.uniqueId);
+                                    if (diff <= minDiff) {
+                                        canAdd = false;
+                                        break;
+                                    }
+                                }
+                            }
+                            
+                            if (canAdd) {
+                                selectedIndices.push(candidate.index);
+                            }
+                        }
+                    }
+                }
+                
+                console.log(`章节 ${numChapterId} - 最终选中数量:`, selectedIndices.length);
+                if (selectedIndices.length > 0) {
+                    const selectedItems = selectedIndices.map(idx => {
+                        const item = globalGeneratedData[idx];
+                        return {
+                            index: idx,
+                            uniqueId: item.uniqueId,
+                            oldEnemyId: item.enemyId,
+                            stageSeq: item.stageSeq
+                        };
+                    });
+                    console.log(`章节 ${numChapterId} - 选中的项详情:`, selectedItems);
+                }
+                
+                // 执行替换：将选中的怪物id的敌人ID替换为特殊标签怪
+                selectedIndices.forEach(idx => {
+                    if (globalGeneratedData[idx]) {
+                        const oldEnemyId = globalGeneratedData[idx].enemyId;
+                        // 替换敌人ID
+                        globalGeneratedData[idx].enemyId = specialTagMonster;
+                        console.log(`章节 ${numChapterId} - 替换: uniqueId=${globalGeneratedData[idx].uniqueId}, 旧enemyId=${oldEnemyId}, 新enemyId=${specialTagMonster}`);
+                        totalReplaced++;
+                    }
+                });
+                
+                // 验证替换结果
+                const replacedItems = globalGeneratedData.filter(item => 
+                    Number(item.chapterId) === numChapterId && 
+                    item.enemyId === specialTagMonster
+                );
+                console.log(`章节 ${numChapterId} - 验证：替换后，enemyId为"${specialTagMonster}"的数量:`, replacedItems.length);
+            });
+            
+            console.log(`\n=== 替换完成，总共替换了 ${totalReplaced} 个敌人ID ===`);
+            
+            // 验证章节6的数据
+            console.log('\n=== 验证章节6的敌人ID（替换后） ===');
+            const chapter6Items = globalGeneratedData.filter(item => Number(item.chapterId) === 6);
+            const chapter6ComboCatItems = chapter6Items.filter(item => item.enemyId === 'ComboCat');
+            console.log('globalGeneratedData中章节6总数据条数:', chapter6Items.length);
+            console.log('globalGeneratedData中章节6的enemyId为ComboCat的数量:', chapter6ComboCatItems.length);
+            if (chapter6ComboCatItems.length > 0) {
+                console.log('globalGeneratedData中章节6的ComboCat详情:', chapter6ComboCatItems.map(item => ({
+                    uniqueId: item.uniqueId,
+                    enemyId: item.enemyId,
+                    stageSeq: item.stageSeq,
+                    stageType: item.stageType
+                })));
+            }
+            
+            // 重新生成processedWorkbook并显示
+            if (processedWorkbook && workbookData) {
+                console.log('\n=== 重新生成processedWorkbook中的怪物组sheet页 ===');
+                
+                // 先读取当前processedWorkbook中的怪物组数据，记录原来的敌人ID值
+                const monsterGroupSheetName = processedWorkbook.SheetNames.find(name => name.includes('怪物组'));
+                let oldEnemyIdMap = {}; // uniqueId -> oldEnemyId
+                if (monsterGroupSheetName) {
+                    const currentMonsterGroupSheet = processedWorkbook.Sheets[monsterGroupSheetName];
+                    const currentMonsterGroupData = XLSX.utils.sheet_to_json(currentMonsterGroupSheet, { header: 1, defval: '', raw: false });
+                    
+                    // 查找"唯一ID"列和"敌人ID"列的索引
+                    let uniqueIdColIndex = -1;
+                    let enemyIdColIndex = -1;
+                    if (currentMonsterGroupData.length > 0) {
+                        const headerRow = currentMonsterGroupData[0];
+                        for (let i = 0; i < headerRow.length; i++) {
+                            const header = String(headerRow[i] || '').trim();
+                            const headerLower = header.toLowerCase();
+                            if (header.includes('唯一ID') || header === '唯一ID' || headerLower.includes('唯一id')) {
+                                uniqueIdColIndex = i;
+                            }
+                            if ((header.includes('敌人') && header.includes('ID') && !header.includes('组')) || (headerLower.includes('敌人id') && !headerLower.includes('组')) || header === '敌人ID' || header === '敌人id') {
+                                enemyIdColIndex = i;
+                            }
+                        }
+                    }
+                    
+                    // 建立uniqueId到oldEnemyId的映射
+                    if (uniqueIdColIndex >= 0 && enemyIdColIndex >= 0) {
+                        for (let row = 1; row < currentMonsterGroupData.length; row++) {
+                            const uniqueId = currentMonsterGroupData[row][uniqueIdColIndex];
+                            const oldEnemyId = currentMonsterGroupData[row][enemyIdColIndex];
+                            if (uniqueId !== '' && uniqueId !== null && uniqueId !== undefined) {
+                                oldEnemyIdMap[Number(uniqueId)] = oldEnemyId !== '' && oldEnemyId !== null && oldEnemyId !== undefined ? String(oldEnemyId) : '';
+                            }
+                        }
+                    }
+                }
+                
+                // 找到原始怪物组sheet页，获取表头信息
+                let originalMonsterGroupSheet = null;
+                let originalMonsterGroupSheetName = null;
+                for (let sheetName of workbookData.SheetNames) {
+                    if (sheetName.includes('怪物组')) {
+                        originalMonsterGroupSheet = workbookData.Sheets[sheetName];
+                        originalMonsterGroupSheetName = sheetName;
+                        break;
+                    }
+                }
+                
+                if (originalMonsterGroupSheet) {
+                    const originalMonsterGroupData = XLSX.utils.sheet_to_json(originalMonsterGroupSheet, { header: 1, defval: '', raw: false });
+                    
+                    // 查找各列的索引
+                    const headerRow = originalMonsterGroupData[0] || [];
+                    let enemyGroupIdColIndex = -1;
+                    let uniqueIdColIndex = -1;
+                    let chapterColInMonsterGroup = -1;
+                    let stageTypeColInMonsterGroup = -1;
+                    let themeColInMonsterGroup = -1;
+                    let enemyIdColInMonsterGroup = -1;
+                    let positionColInMonsterGroup = -1;
+                    let stageSeqColInMonsterGroup = -1;
+                    let hpTimesColInMonsterGroup = -1;
+                    let atkTimesColInMonsterGroup = -1;
+                    
+                    for (let i = 0; i < headerRow.length; i++) {
+                        const header = String(headerRow[i] || '').trim();
+                        const headerLower = header.toLowerCase();
+                        if (header.includes('敌人组ID') || header === '敌人组ID' || headerLower.includes('敌人组id')) {
+                            enemyGroupIdColIndex = i;
+                        }
+                        if (header.includes('唯一ID') || header === '唯一ID' || headerLower.includes('唯一id')) {
+                            uniqueIdColIndex = i;
+                        }
+                        if (header.includes('章节') && !header.includes('ID') && !headerLower.includes('id')) {
+                            chapterColInMonsterGroup = i;
+                        }
+                        if (header.includes('关卡类型') || header === '关卡类型' || headerLower.includes('关卡类型')) {
+                            stageTypeColInMonsterGroup = i;
+                        }
+                        if (header.includes('主题') || header === '主题') {
+                            themeColInMonsterGroup = i;
+                        }
+                        if ((header.includes('敌人') && header.includes('ID') && !header.includes('组')) || (headerLower.includes('敌人id') && !headerLower.includes('组')) || header === '敌人ID' || header === '敌人id') {
+                            enemyIdColInMonsterGroup = i;
+                        }
+                        if (header.includes('站位') && !header.includes('ID') && !headerLower.includes('id')) {
+                            positionColInMonsterGroup = i;
+                        }
+                        if (header.includes('小关序号') || header === '小关序号' || (header.includes('序号') && !header.includes('唯一'))) {
+                            stageSeqColInMonsterGroup = i;
+                        }
+                        if (header.includes('标准血量倍率范围') || header === '标准血量倍率范围') {
+                            hpTimesColInMonsterGroup = i;
+                        }
+                        if (header.includes('标准攻击力倍率范围') || header === '标准攻击力倍率范围') {
+                            atkTimesColInMonsterGroup = i;
+                        }
+                    }
+                    
+                    console.log('列索引:', {
+                        enemyGroupIdColIndex,
+                        uniqueIdColIndex,
+                        chapterColInMonsterGroup,
+                        stageTypeColInMonsterGroup,
+                        themeColInMonsterGroup,
+                        enemyIdColInMonsterGroup,
+                        positionColInMonsterGroup,
+                        stageSeqColInMonsterGroup,
+                        hpTimesColInMonsterGroup,
+                        atkTimesColInMonsterGroup
+                    });
+                    
+                    // 重新创建怪物组sheet页
+                    const newSheet = XLSX.utils.aoa_to_sheet(originalMonsterGroupData);
+                    
+                    // 从第二行开始（索引1）填充数据
+                    for (let i = 0; i < globalGeneratedData.length; i++) {
+                        const rowIndex = i + 1; // 第二行开始（索引1）
+                        
+                        // 填充敌人组ID
+                        if (enemyGroupIdColIndex >= 0) {
+                            const enemyGroupCellAddress = XLSX.utils.encode_cell({ r: rowIndex, c: enemyGroupIdColIndex });
+                            newSheet[enemyGroupCellAddress] = { v: globalGeneratedData[i].enemyGroupId, t: 'n' };
+                        }
+                        
+                        // 填充唯一ID
+                        if (uniqueIdColIndex >= 0) {
+                            const uniqueIdCellAddress = XLSX.utils.encode_cell({ r: rowIndex, c: uniqueIdColIndex });
+                            newSheet[uniqueIdCellAddress] = { v: globalGeneratedData[i].uniqueId, t: 'n' };
+                        }
+                        
+                        // 填充章节ID
+                        if (chapterColInMonsterGroup >= 0) {
+                            const chapterCellAddress = XLSX.utils.encode_cell({ r: rowIndex, c: chapterColInMonsterGroup });
+                            newSheet[chapterCellAddress] = { v: globalGeneratedData[i].chapterId, t: 'n' };
+                        }
+                        
+                        // 填充关卡类型
+                        if (stageTypeColInMonsterGroup >= 0) {
+                            const stageTypeCellAddress = XLSX.utils.encode_cell({ r: rowIndex, c: stageTypeColInMonsterGroup });
+                            const stageTypeValue = globalGeneratedData[i].stageType || '';
+                            const numStageType = Number(stageTypeValue);
+                            newSheet[stageTypeCellAddress] = { 
+                                v: stageTypeValue, 
+                                t: (stageTypeValue !== '' && !isNaN(numStageType)) ? 'n' : 's' 
+                            };
+                        }
+                        
+                        // 填充主题
+                        if (themeColInMonsterGroup >= 0) {
+                            const themeCellAddress = XLSX.utils.encode_cell({ r: rowIndex, c: themeColInMonsterGroup });
+                            const themeValue = globalGeneratedData[i].theme || '';
+                            const numTheme = Number(themeValue);
+                            newSheet[themeCellAddress] = { 
+                                v: themeValue, 
+                                t: (themeValue !== '' && !isNaN(numTheme)) ? 'n' : 's' 
+                            };
+                        }
+                        
+                        // 填充小关序号
+                        if (stageSeqColInMonsterGroup >= 0) {
+                            const stageSeqCellAddress = XLSX.utils.encode_cell({ r: rowIndex, c: stageSeqColInMonsterGroup });
+                            const stageSeqValue = globalGeneratedData[i].stageSeq || '';
+                            const numStageSeq = Number(stageSeqValue);
+                            newSheet[stageSeqCellAddress] = { 
+                                v: stageSeqValue, 
+                                t: (stageSeqValue !== '' && !isNaN(numStageSeq)) ? 'n' : 's' 
+                            };
+                        }
+                        
+                        // 填充敌人ID（使用更新后的值）
+                        if (enemyIdColInMonsterGroup >= 0) {
+                            const enemyIdCellAddress = XLSX.utils.encode_cell({ r: rowIndex, c: enemyIdColInMonsterGroup });
+                            const enemyIdValue = globalGeneratedData[i].enemyId || '';
+                            const numEnemyId = Number(enemyIdValue);
+                            newSheet[enemyIdCellAddress] = { 
+                                v: enemyIdValue, 
+                                t: (enemyIdValue !== '' && !isNaN(numEnemyId)) ? 'n' : 's' 
+                            };
+                            
+                            // 记录敌人ID的改动
+                            const uniqueId = globalGeneratedData[i].uniqueId;
+                            const oldEnemyId = oldEnemyIdMap[uniqueId] !== undefined ? oldEnemyIdMap[uniqueId] : '';
+                            const newEnemyId = enemyIdValue;
+                            
+                            // 如果敌人ID有改动，输出日志
+                            if (oldEnemyId !== newEnemyId) {
+                                console.log(`敌人ID改动: 行号=${rowIndex}, uniqueId=${uniqueId}, 章节ID=${globalGeneratedData[i].chapterId}, 小关序号=${globalGeneratedData[i].stageSeq}, 关卡类型=${globalGeneratedData[i].stageType}, 原值="${oldEnemyId}", 新值="${newEnemyId}"`);
+                            }
+                            
+                            // 记录章节6的ComboCat
+                            if (globalGeneratedData[i].chapterId === 6 && enemyIdValue === 'ComboCat') {
+                                console.log(`写入章节6的ComboCat: rowIndex=${rowIndex}, uniqueId=${uniqueId}, 原值="${oldEnemyId}", 新值="${enemyIdValue}"`);
+                            }
+                        }
+                        
+                        // 填充站位
+                        if (positionColInMonsterGroup >= 0) {
+                            const positionCellAddress = XLSX.utils.encode_cell({ r: rowIndex, c: positionColInMonsterGroup });
+                            const positionValue = globalGeneratedData[i].position || '';
+                            const numPosition = Number(positionValue);
+                            newSheet[positionCellAddress] = { 
+                                v: positionValue, 
+                                t: (positionValue !== '' && !isNaN(numPosition)) ? 'n' : 's' 
+                            };
+                        }
+                        
+                        // 填充标准血量倍率范围
+                        if (hpTimesColInMonsterGroup >= 0) {
+                            const hpTimesCellAddress = XLSX.utils.encode_cell({ r: rowIndex, c: hpTimesColInMonsterGroup });
+                            const hpTimesValue = globalGeneratedData[i].hpTimes || '';
+                            newSheet[hpTimesCellAddress] = { 
+                                v: hpTimesValue, 
+                                t: 's' 
+                            };
+                        }
+                        
+                        // 填充标准攻击力倍率范围
+                        if (atkTimesColInMonsterGroup >= 0) {
+                            const atkTimesCellAddress = XLSX.utils.encode_cell({ r: rowIndex, c: atkTimesColInMonsterGroup });
+                            const atkTimesValue = globalGeneratedData[i].atkTimes || '';
+                            newSheet[atkTimesCellAddress] = { 
+                                v: atkTimesValue, 
+                                t: 's' 
+                            };
+                        }
+                    }
+                    
+                    // 更新范围
+                    const colsToCheck = [];
+                    if (enemyGroupIdColIndex >= 0) colsToCheck.push(enemyGroupIdColIndex);
+                    if (uniqueIdColIndex >= 0) colsToCheck.push(uniqueIdColIndex);
+                    if (chapterColInMonsterGroup >= 0) colsToCheck.push(chapterColInMonsterGroup);
+                    if (stageTypeColInMonsterGroup >= 0) colsToCheck.push(stageTypeColInMonsterGroup);
+                    if (themeColInMonsterGroup >= 0) colsToCheck.push(themeColInMonsterGroup);
+                    if (stageSeqColInMonsterGroup >= 0) colsToCheck.push(stageSeqColInMonsterGroup);
+                    if (enemyIdColInMonsterGroup >= 0) colsToCheck.push(enemyIdColInMonsterGroup);
+                    if (positionColInMonsterGroup >= 0) colsToCheck.push(positionColInMonsterGroup);
+                    if (hpTimesColInMonsterGroup >= 0) colsToCheck.push(hpTimesColInMonsterGroup);
+                    if (atkTimesColInMonsterGroup >= 0) colsToCheck.push(atkTimesColInMonsterGroup);
+                    const maxCol = Math.max(...originalMonsterGroupData.map(row => row.length), ...colsToCheck);
+                    const maxRow = Math.max(originalMonsterGroupData.length - 1, 1 + globalGeneratedData.length - 1);
+                    newSheet['!ref'] = XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: maxRow, c: maxCol } });
+                    
+                    // 更新processedWorkbook中的怪物组sheet页
+                    if (monsterGroupSheetName) {
+                        processedWorkbook.Sheets[monsterGroupSheetName] = newSheet;
+                        console.log('已重新生成并写入怪物组sheet页');
+                        
+                        // 统计改动情况
+                        let totalChanges = 0;
+                        let chapter6Changes = 0;
+                        const changesList = [];
+                        for (let i = 0; i < globalGeneratedData.length; i++) {
+                            const uniqueId = globalGeneratedData[i].uniqueId;
+                            const oldEnemyId = oldEnemyIdMap[uniqueId] !== undefined ? oldEnemyIdMap[uniqueId] : '';
+                            const newEnemyId = globalGeneratedData[i].enemyId || '';
+                            if (oldEnemyId !== newEnemyId) {
+                                totalChanges++;
+                                changesList.push({
+                                    rowIndex: i + 1,
+                                    uniqueId: uniqueId,
+                                    chapterId: globalGeneratedData[i].chapterId,
+                                    stageSeq: globalGeneratedData[i].stageSeq,
+                                    stageType: globalGeneratedData[i].stageType,
+                                    oldEnemyId: oldEnemyId,
+                                    newEnemyId: newEnemyId
+                                });
+                                if (globalGeneratedData[i].chapterId === 6) {
+                                    chapter6Changes++;
+                                }
+                            }
+                        }
+                        console.log(`\n=== 敌人ID改动统计 ===`);
+                        console.log(`总共改动: ${totalChanges} 个敌人ID`);
+                        console.log(`章节6改动: ${chapter6Changes} 个敌人ID`);
+                        if (changesList.length > 0) {
+                            console.log('\n=== 所有改动详情 ===');
+                            changesList.forEach(change => {
+                                console.log(`行号=${change.rowIndex}, uniqueId=${change.uniqueId}, 章节ID=${change.chapterId}, 小关序号=${change.stageSeq}, 关卡类型=${change.stageType}, 原值="${change.oldEnemyId}", 新值="${change.newEnemyId}"`);
+                            });
+                        }
+                    }
+                }
+                
+                // 显示更新后的数据
+                displayProcessedData(processedWorkbook);
+                
+                alert(`替换完成！共替换了 ${totalReplaced} 个怪物ID`);
+            } else {
+                alert('替换完成！共替换了 ' + totalReplaced + ' 个怪物ID（但无法更新预览，请重新处理数据）');
+            }
         }
 
         // 上传并解析怪物组文件
