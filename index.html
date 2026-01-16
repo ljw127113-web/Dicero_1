@@ -525,8 +525,24 @@
     </div>
 
     <script>
-        // 版本号配置 - 每次代码修改时，将最后一个点后面的数字+1（最大9999，中间位保持为0由用户手动提升）
-        const VERSION = '1.0.21';
+        // 版本号配置 - 每次代码修改时，将最后一个点后面的数字+1（最大99999）
+        // 使用辅助函数自动递增版本号
+        function incrementVersion(version) {
+            const parts = version.split('.');
+            if (parts.length < 2) return version;
+            
+            const lastPart = parseInt(parts[parts.length - 1], 10);
+            if (isNaN(lastPart)) return version;
+            
+            // 最大值为99999
+            const newLastPart = Math.min(lastPart + 1, 99999);
+            parts[parts.length - 1] = newLastPart.toString();
+            
+            return parts.join('.');
+        }
+        
+        // 当前版本号：1.0.22（已自动递增）
+        const VERSION = '1.0.22';
         
         // 显示版本号
         document.addEventListener('DOMContentLoaded', () => {
@@ -573,6 +589,8 @@
         let globalPlanData = null; // 存储"关卡规划总"的原始数据，供导出使用
         let uploadedMonsterGroupData = null; // 存储上传的怪物组数据，如果存在则覆盖globalGeneratedData
         let uploadedMonsterGroupWorkbook = null; // 存储上传的怪物组工作簿
+        let generatedDataStats = null; // 存储生成数据的统计信息
+        let uploadedDataStats = null; // 存储上传数据的统计信息
 
         // 文件上传区域事件
         const uploadArea = document.getElementById('uploadArea');
@@ -1910,8 +1928,68 @@
             resultDiv.innerHTML = resultText;
             resultDiv.style.display = 'block';
 
+            // 验证生成的数据：确保所有数据的chapterId都是有效的数字
+            const invalidData = generatedData.filter(item => {
+                const cid = item.chapterId;
+                if (cid === null || cid === undefined) {
+                    return true;
+                }
+                const numCid = Number(cid);
+                return isNaN(numCid) || numCid <= 0;
+            });
+            if (invalidData.length > 0) {
+                console.warn(`警告：生成的数据中有 ${invalidData.length} 条数据的chapterId无效`, {
+                    无效数据示例: invalidData.slice(0, 5)
+                });
+            }
+            
             // 保存生成的数据供导出使用
             globalGeneratedData = generatedData;
+            
+            // 统计生成的怪物组数据中章节ID的分布
+            const chapterIdStats = {};
+            generatedData.forEach((item) => {
+                const cid = item.chapterId;
+                if (cid !== null && cid !== undefined) {
+                    // 统一转换为数字，确保类型一致
+                    const numCid = Number(cid);
+                    if (!isNaN(numCid) && numCid > 0) {
+                        chapterIdStats[numCid] = (chapterIdStats[numCid] || 0) + 1;
+                    } else {
+                        const strCid = String(cid);
+                        chapterIdStats[strCid] = (chapterIdStats[strCid] || 0) + 1;
+                    }
+                }
+            });
+            
+            // 统计章节ID数量
+            const generatedChapterIds = Object.keys(chapterIdStats)
+                .map(key => {
+                    const numKey = Number(key);
+                    return !isNaN(numKey) ? numKey : key;
+                })
+                .filter(id => typeof id === 'number' && !isNaN(id))
+                .sort((a, b) => a - b);
+            const generatedChapterIdCount = generatedChapterIds.length;
+            
+            console.log('生成数据统计 - 怪物组sheet页:', {
+                总数据条数: generatedData.length,
+                章节ID数量: generatedChapterIdCount,
+                章节ID列表: generatedChapterIds,
+                章节ID分布: chapterIdStats
+            });
+            
+            // 单独输出章节ID数量
+            console.log(`生成数据时，怪物组sheet页中，章节ID一共有 ${generatedChapterIdCount} 个:`, generatedChapterIds);
+            console.log('章节ID分布详情:', chapterIdStats);
+            
+            // 保存生成数据的统计信息
+            generatedDataStats = {
+                总数据条数: generatedData.length,
+                章节ID数量: generatedChapterIdCount,
+                章节ID列表: generatedChapterIds,
+                章节ID分布: chapterIdStats
+            };
 
             // 显示处理后的数据预览
             displayProcessedData(processedWorkbook);
@@ -2006,6 +2084,7 @@
                     let atkTimesColIndex = -1;
                     let stageSeqColIndex = -1;
                     let skillOrderColIndex = -1;
+                    let chapterIdColIndex = -1; // 章节ID列（优先使用）
                     
                     for (let i = 0; i < headerRow.length; i++) {
                         const header = String(headerRow[i] || '').trim();
@@ -2026,6 +2105,13 @@
                             stageSeqColIndex = i;
                         } else if (header.includes('技能顺序') || header === '技能顺序') {
                             skillOrderColIndex = i;
+                        } else if (header.includes('章节') && (header.includes('ID') || header.includes('id') || header === '章节')) {
+                            // 优先匹配"章节ID"，如果没有则匹配"章节"
+                            if (header.includes('章节ID') || header === '章节ID' || headerLower.includes('章节id')) {
+                                chapterIdColIndex = i;
+                            } else if (chapterIdColIndex === -1 && (header === '章节' || header.includes('章节'))) {
+                                chapterIdColIndex = i;
+                            }
                         }
                     }
                     
@@ -2039,7 +2125,9 @@
                         positionColIndex: positionColIndex,
                         hpTimesColIndex: hpTimesColIndex,
                         atkTimesColIndex: atkTimesColIndex,
-                        stageSeqColIndex: stageSeqColIndex
+                        stageSeqColIndex: stageSeqColIndex,
+                        chapterIdColIndex: chapterIdColIndex,
+                        是否找到章节列: chapterIdColIndex >= 0 ? '是' : '否'
                     });
                     
                     if (uniqueIdColIndex < 0 || enemyGroupIdColIndex < 0) {
@@ -2071,24 +2159,306 @@
                         let stageSeq = null;
                         let monsterCount = null;
                         
-                        if (globalGeneratedData) {
-                            // 根据enemyGroupId查找匹配的数据
-                            const matchedData = globalGeneratedData.find(d => 
-                                d.enemyGroupId === enemyGroupId || 
-                                (Number(d.enemyGroupId) === Number(enemyGroupId))
-                            );
-                            if (matchedData) {
-                                chapterId = matchedData.chapterId;
-                                stageType = matchedData.stageType;
-                                theme = matchedData.theme;
-                                stageSeq = matchedData.stageSeq;
-                                monsterCount = matchedData.monsterCount;
+                        // 优先从上传文件中直接读取章节ID（如果存在该列）
+                        // 这是最准确的方式，因为文件中的章节ID是原始数据
+                        if (chapterIdColIndex >= 0 && rowData[chapterIdColIndex] !== '' && rowData[chapterIdColIndex] !== null && rowData[chapterIdColIndex] !== undefined) {
+                            const fileChapterId = Number(rowData[chapterIdColIndex]);
+                            if (!isNaN(fileChapterId) && fileChapterId > 0) {
+                                chapterId = fileChapterId;
+                                // 如果从文件中读取到了章节ID，直接使用，不再进行其他查找
+                                // 这样可以确保准确性
                             }
                         }
                         
                         // 如果从上传文件中读取到了小关序号，使用它
                         if (stageSeqColIndex >= 0 && rowData[stageSeqColIndex] !== '' && rowData[stageSeqColIndex] !== null && rowData[stageSeqColIndex] !== undefined) {
                             stageSeq = rowData[stageSeqColIndex];
+                        }
+                        
+                        // 如果还没有stageSeq，尝试从enemyGroupId反推（enemyGroupId = stageSeq * 100 + 1）
+                        if (!stageSeq && enemyGroupId !== '' && enemyGroupId !== null && enemyGroupId !== undefined) {
+                            const numEnemyGroupId = Number(enemyGroupId);
+                            if (!isNaN(numEnemyGroupId) && numEnemyGroupId > 0) {
+                                // 反推：stageSeq = (enemyGroupId - 1) / 100
+                                const calculatedStageSeq = Math.floor((numEnemyGroupId - 1) / 100);
+                                if (calculatedStageSeq > 0) {
+                                    stageSeq = calculatedStageSeq;
+                                }
+                            }
+                        }
+                        
+                        // 如果还没有chapterId，尝试从globalGeneratedData中根据enemyGroupId和uniqueId匹配
+                        // 这样可以更准确地匹配，因为uniqueId是按章节递增的
+                        if (!chapterId && globalGeneratedData && enemyGroupId !== '' && enemyGroupId !== null && enemyGroupId !== undefined) {
+                            const numEnemyGroupId = Number(enemyGroupId);
+                            if (!isNaN(numEnemyGroupId)) {
+                                let matchedData = null;
+                                
+                                // 优先尝试同时匹配enemyGroupId和uniqueId，这样最准确
+                                if (uniqueId !== '' && uniqueId !== null && uniqueId !== undefined) {
+                                    const numUniqueId = Number(uniqueId);
+                                    if (!isNaN(numUniqueId)) {
+                                        matchedData = globalGeneratedData.find(d => {
+                                            const dEnemyGroupId = Number(d.enemyGroupId);
+                                            const dUniqueId = Number(d.uniqueId);
+                                            return !isNaN(dEnemyGroupId) && !isNaN(dUniqueId) && 
+                                                   dEnemyGroupId === numEnemyGroupId && dUniqueId === numUniqueId;
+                                        });
+                                    }
+                                }
+                                
+                                // 如果精确匹配失败，尝试只匹配enemyGroupId
+                                if (!matchedData) {
+                                    matchedData = globalGeneratedData.find(d => {
+                                        const dEnemyGroupId = Number(d.enemyGroupId);
+                                        return !isNaN(dEnemyGroupId) && dEnemyGroupId === numEnemyGroupId;
+                                    });
+                                }
+                                
+                                if (matchedData) {
+                                    chapterId = matchedData.chapterId;
+                                    stageType = matchedData.stageType;
+                                    theme = matchedData.theme;
+                                    if (!stageSeq) {
+                                        stageSeq = matchedData.stageSeq;
+                                    }
+                                    monsterCount = matchedData.monsterCount;
+                                }
+                            }
+                        }
+                        
+                        // 如果仍然没有chapterId，尝试从globalPlanData中根据stageSeq查找
+                        // 调试日志：记录查找过程
+                        let lookupDebugInfo = null;
+                        if (!chapterId && stageSeq !== null && stageSeq !== undefined && globalPlanData && globalPlanData.data) {
+                            lookupDebugInfo = {
+                                enemyGroupId: enemyGroupId,
+                                stageSeq: stageSeq,
+                                开始查找: true
+                            };
+                            const planData = globalPlanData.data;
+                            const headerRow = globalPlanData.headerRow;
+                            
+                            // 查找章节列和小关序号列的索引
+                            let chapterColIndex = -1;
+                            let stageSeqColIndexInPlan = -1;
+                            for (let i = 0; i < headerRow.length; i++) {
+                                const header = String(headerRow[i] || '').trim();
+                                if (header.includes('章节') || header === '章节') {
+                                    chapterColIndex = i;
+                                }
+                                if (header.includes('小关序号') || header === '小关序号' || (header.includes('序号') && !header.includes('唯一'))) {
+                                    stageSeqColIndexInPlan = i;
+                                }
+                            }
+                            
+                            // 在planData中查找匹配的stageSeq
+                            if (chapterColIndex >= 0 && stageSeqColIndexInPlan >= 0) {
+                                const numStageSeq = Number(stageSeq);
+                                if (!isNaN(numStageSeq)) {
+                                    // 收集所有匹配的章节ID
+                                    const matchedChapterIds = [];
+                                    for (let row = 1; row < planData.length; row++) {
+                                        const rowStageSeq = planData[row][stageSeqColIndexInPlan];
+                                        const numRowStageSeq = Number(rowStageSeq);
+                                        if (!isNaN(numRowStageSeq) && numRowStageSeq === numStageSeq) {
+                                            const rowChapterId = planData[row][chapterColIndex];
+                                            if (rowChapterId !== '' && rowChapterId !== null && rowChapterId !== undefined) {
+                                                const numChapterId = Number(rowChapterId);
+                                                if (!isNaN(numChapterId) && !matchedChapterIds.includes(numChapterId)) {
+                                                    matchedChapterIds.push(numChapterId);
+                                                }
+                                            }
+                                        }
+                                    }
+                                    
+                                    // 如果有匹配的章节ID，根据enemyGroupId来判断应该属于哪个章节
+                                    if (matchedChapterIds.length > 0) {
+                                        if (lookupDebugInfo) {
+                                            lookupDebugInfo.找到的匹配章节ID = matchedChapterIds;
+                                            lookupDebugInfo.匹配数量 = matchedChapterIds.length;
+                                        }
+                                        
+                                        // 如果只有一个匹配，直接使用
+                                        if (matchedChapterIds.length === 1) {
+                                            chapterId = matchedChapterIds[0];
+                                            if (lookupDebugInfo) {
+                                                lookupDebugInfo.选择的章节ID = chapterId;
+                                                lookupDebugInfo.选择原因 = '只有一个匹配';
+                                            }
+                                        } else {
+                                            // 如果有多个匹配，需要根据enemyGroupId来判断应该属于哪个章节
+                                            let bestMatchChapterId = null;
+                                            
+                                            // 策略1：优先从globalGeneratedData中查找
+                                            if (globalGeneratedData && enemyGroupId !== '' && enemyGroupId !== null && enemyGroupId !== undefined) {
+                                                const numEnemyGroupId = Number(enemyGroupId);
+                                                if (!isNaN(numEnemyGroupId)) {
+                                                    const matchedData = globalGeneratedData.find(d => 
+                                                        d.enemyGroupId === numEnemyGroupId || 
+                                                        Number(d.enemyGroupId) === numEnemyGroupId
+                                                    );
+                                                    if (matchedData && matchedData.chapterId && matchedChapterIds.includes(matchedData.chapterId)) {
+                                                        bestMatchChapterId = matchedData.chapterId;
+                                                    }
+                                                }
+                                            }
+                                            
+                                            // 策略2：如果从globalGeneratedData没找到，根据enemyGroupId在globalGeneratedData中的分布来判断
+                                            // 由于enemyGroupId = stageSeq * 100 + 1，不同章节的相同stageSeq会产生相同的enemyGroupId
+                                            // 所以我们需要其他方式来判断
+                                            if (!bestMatchChapterId && globalGeneratedData && enemyGroupId !== '' && enemyGroupId !== null && enemyGroupId !== undefined) {
+                                                const numEnemyGroupId = Number(enemyGroupId);
+                                                if (!isNaN(numEnemyGroupId)) {
+                                                    // 在globalGeneratedData中查找所有具有相同enemyGroupId的数据，看看它们属于哪些章节
+                                                    const sameEnemyGroupIdData = globalGeneratedData.filter(d => 
+                                                        d.enemyGroupId === numEnemyGroupId || 
+                                                        Number(d.enemyGroupId) === numEnemyGroupId
+                                                    );
+                                                    
+                                                    if (sameEnemyGroupIdData.length > 0) {
+                                                        // 统计这些数据属于哪些章节
+                                                        const chapterCounts = {};
+                                                        sameEnemyGroupIdData.forEach(d => {
+                                                            if (d.chapterId !== null && d.chapterId !== undefined) {
+                                                                chapterCounts[d.chapterId] = (chapterCounts[d.chapterId] || 0) + 1;
+                                                            }
+                                                        });
+                                                        
+                                                        // 找到在matchedChapterIds中且出现次数最多的章节
+                                                        let maxCount = 0;
+                                                        for (const cid of matchedChapterIds) {
+                                                            if (chapterCounts[cid] && chapterCounts[cid] > maxCount) {
+                                                                maxCount = chapterCounts[cid];
+                                                                bestMatchChapterId = cid;
+                                                            }
+                                                        }
+                                                        
+                                                        if (lookupDebugInfo) {
+                                                            lookupDebugInfo.策略2_相同enemyGroupId的数据 = sameEnemyGroupIdData.length;
+                                                            lookupDebugInfo.策略2_章节统计 = chapterCounts;
+                                                            lookupDebugInfo.策略2_选择的章节 = bestMatchChapterId;
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                            
+                                            // 策略3：如果从globalGeneratedData没找到，尝试根据uniqueId和enemyGroupId的组合来判断
+                                            // 如果上传的文件中有uniqueId，可以尝试根据uniqueId的范围来判断章节
+                                            // 但实际上，uniqueId是按章节递增的，所以可以根据uniqueId的范围来判断
+                                            if (!bestMatchChapterId && uniqueId !== '' && uniqueId !== null && uniqueId !== undefined) {
+                                                const numUniqueId = Number(uniqueId);
+                                                if (!isNaN(numUniqueId) && numUniqueId > 0) {
+                                                    // 在globalGeneratedData中查找所有具有相同enemyGroupId的数据
+                                                    const sameEnemyGroupIdData = globalGeneratedData.filter(d => {
+                                                        const dEnemyGroupId = Number(d.enemyGroupId);
+                                                        return !isNaN(dEnemyGroupId) && dEnemyGroupId === Number(enemyGroupId);
+                                                    });
+                                                    
+                                                    if (sameEnemyGroupIdData.length > 0) {
+                                                        // 对于每个匹配的章节，计算该章节该enemyGroupId的uniqueId范围
+                                                        // 找到uniqueId最接近的章节
+                                                        let minDiff = Infinity;
+                                                        for (const cid of matchedChapterIds) {
+                                                            // 找到该章节该enemyGroupId的所有数据
+                                                            const chapterData = sameEnemyGroupIdData.filter(d => Number(d.chapterId) === cid);
+                                                            if (chapterData.length > 0) {
+                                                                // 计算该章节该enemyGroupId的uniqueId范围
+                                                                const uniqueIds = chapterData.map(d => Number(d.uniqueId)).filter(id => !isNaN(id)).sort((a, b) => a - b);
+                                                                if (uniqueIds.length > 0) {
+                                                                    // 找到uniqueId最接近的值
+                                                                    const minUniqueId = uniqueIds[0];
+                                                                    const maxUniqueId = uniqueIds[uniqueIds.length - 1];
+                                                                    // 如果当前uniqueId在这个范围内，或者最接近
+                                                                    if (numUniqueId >= minUniqueId && numUniqueId <= maxUniqueId) {
+                                                                        bestMatchChapterId = cid;
+                                                                        break;
+                                                                    } else {
+                                                                        // 计算距离
+                                                                        const diff = Math.min(Math.abs(numUniqueId - minUniqueId), Math.abs(numUniqueId - maxUniqueId));
+                                                                        if (diff < minDiff) {
+                                                                            minDiff = diff;
+                                                                            bestMatchChapterId = cid;
+                                                                        }
+                                                                    }
+                                                                }
+                                                            }
+                                                        }
+                                                        
+                                                        if (lookupDebugInfo) {
+                                                            lookupDebugInfo.策略3_使用的uniqueId = numUniqueId;
+                                                            lookupDebugInfo.策略3_选择的章节 = bestMatchChapterId;
+                                                            lookupDebugInfo.策略3_选择原因 = '根据uniqueId范围判断';
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                            
+                                            // 策略4：如果还是没找到，根据章节ID的大小来判断（通常后面的章节ID更大）
+                                            // 但这只是一个启发式方法，可能不准确
+                                            if (!bestMatchChapterId) {
+                                                const sortedChapterIds = matchedChapterIds.sort((a, b) => b - a);
+                                                // 如果enemyGroupId很大（可能是后面的章节），选择较大的章节ID
+                                                // 否则选择较小的章节ID
+                                                const numEnemyGroupId = Number(enemyGroupId);
+                                                if (!isNaN(numEnemyGroupId) && numEnemyGroupId > 1000) {
+                                                    bestMatchChapterId = sortedChapterIds[0]; // 最大的章节ID
+                                                } else {
+                                                    bestMatchChapterId = sortedChapterIds[sortedChapterIds.length - 1]; // 最小的章节ID
+                                                }
+                                                if (lookupDebugInfo) {
+                                                    lookupDebugInfo.策略4_选择的章节 = bestMatchChapterId;
+                                                    lookupDebugInfo.策略4_选择原因 = '根据章节ID大小判断（启发式）';
+                                                }
+                                            }
+                                            
+                                            chapterId = bestMatchChapterId;
+                                            
+                                            // 如果还是没找到，使用第一个匹配（但这是最后的手段，可能不准确）
+                                            if (!chapterId) {
+                                                chapterId = matchedChapterIds[0];
+                                                if (lookupDebugInfo) {
+                                                    lookupDebugInfo.选择的章节ID = chapterId;
+                                                    lookupDebugInfo.选择原因 = '使用第一个匹配（fallback，可能不准确）';
+                                                }
+                                            } else if (lookupDebugInfo) {
+                                                lookupDebugInfo.选择的章节ID = chapterId;
+                                                lookupDebugInfo.选择原因 = lookupDebugInfo.选择原因 || '根据enemyGroupId范围判断';
+                                            }
+                                        }
+                                        
+                                        // 如果找到了chapterId，也尝试获取stageType
+                                        if (!stageType && globalPlanData.headerRow && chapterId) {
+                                            for (let row = 1; row < planData.length; row++) {
+                                                const rowStageSeq = planData[row][stageSeqColIndexInPlan];
+                                                const rowChapterId = planData[row][chapterColIndex];
+                                                const numRowStageSeq = Number(rowStageSeq);
+                                                const numRowChapterId = Number(rowChapterId);
+                                                if (!isNaN(numRowStageSeq) && numRowStageSeq === numStageSeq &&
+                                                    !isNaN(numRowChapterId) && numRowChapterId === chapterId) {
+                                                    let stageTypeColIndex = -1;
+                                                    for (let i = 0; i < globalPlanData.headerRow.length; i++) {
+                                                        const header = String(globalPlanData.headerRow[i] || '').trim();
+                                                        if (header.includes('关卡类型') || header === '关卡类型' || header.includes('类型')) {
+                                                            stageTypeColIndex = i;
+                                                            break;
+                                                        }
+                                                    }
+                                                    if (stageTypeColIndex >= 0) {
+                                                        stageType = planData[row][stageTypeColIndex];
+                                                    }
+                                                    break;
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                            
+                            // 输出调试信息（仅对前几条数据或没有找到chapterId的数据）
+                            if (lookupDebugInfo && (parsedData.length < 10 || !chapterId)) {
+                                console.log(`从globalPlanData查找chapterId [行${row}]:`, lookupDebugInfo);
+                            }
                         }
                         
                         parsedData.push({
@@ -2112,6 +2482,167 @@
                         resultDiv.innerHTML = '<span style="color: #dc3545;">上传失败：解析后的数据为空</span>';
                         resultDiv.style.display = 'block';
                         return;
+                    }
+                    
+                    // 调试日志：输出解析结果统计
+                    // 确保chapterId类型一致（统一转换为数字），避免字符串和数字被分别统计
+                    const chapterIdStats = {};
+                    const noChapterIdData = [];
+                    parsedData.forEach((item, index) => {
+                        const cid = item.chapterId;
+                        if (cid !== null && cid !== undefined) {
+                            // 统一转换为数字，确保类型一致
+                            const numCid = Number(cid);
+                            if (!isNaN(numCid)) {
+                                // 使用数字作为key，确保类型一致
+                                chapterIdStats[numCid] = (chapterIdStats[numCid] || 0) + 1;
+                            } else {
+                                // 如果无法转换为数字，使用字符串
+                                const strCid = String(cid);
+                                chapterIdStats[strCid] = (chapterIdStats[strCid] || 0) + 1;
+                            }
+                        } else {
+                            chapterIdStats['null/undefined'] = (chapterIdStats['null/undefined'] || 0) + 1;
+                            // 收集前10条没有chapterId的数据用于调试
+                            if (noChapterIdData.length < 10) {
+                                noChapterIdData.push({
+                                    索引: index,
+                                    uniqueId: item.uniqueId,
+                                    enemyGroupId: item.enemyGroupId,
+                                    stageSeq: item.stageSeq
+                                });
+                            }
+                        }
+                    });
+                    
+                    // 统计章节ID数量（排除null/undefined）
+                    const chapterIds = Object.keys(chapterIdStats)
+                        .filter(key => key !== 'null/undefined')
+                        .map(key => {
+                            const numKey = Number(key);
+                            return !isNaN(numKey) ? numKey : key;
+                        })
+                        .filter(id => typeof id === 'number' && !isNaN(id))
+                        .sort((a, b) => a - b);
+                    const chapterIdCount = chapterIds.length;
+                    
+                    console.log('怪物组数据解析统计:', {
+                        总数据条数: parsedData.length,
+                        章节ID数量: chapterIdCount,
+                        章节ID列表: chapterIds,
+                        章节ID分布: chapterIdStats,
+                        有章节ID的数据: parsedData.filter(item => item.chapterId !== null && item.chapterId !== undefined).length,
+                        无章节ID的数据: parsedData.filter(item => item.chapterId === null || item.chapterId === undefined).length,
+                        无章节ID的数据示例: noChapterIdData.slice(0, 5)
+                    });
+                    
+                    // 单独输出章节ID数量
+                    console.log(`新上传的怪物组文件中，章节ID一共有 ${chapterIdCount} 个:`, chapterIds);
+                    
+                    // 如果有大量数据没有chapterId，输出警告
+                    const noChapterIdCount = parsedData.filter(item => item.chapterId === null || item.chapterId === undefined).length;
+                    if (noChapterIdCount > 0) {
+                        console.warn(`警告：有 ${noChapterIdCount} 条数据没有找到chapterId，这可能导致导出时数据丢失！`);
+                        console.warn('建议检查：');
+                        console.warn('1. globalGeneratedData是否包含所有章节的数据？');
+                        console.warn('2. globalPlanData是否正确加载？');
+                        console.warn('3. enemyGroupId是否能正确反推stageSeq？');
+                    }
+                    
+                    // 保存上传数据的统计信息
+                    uploadedDataStats = {
+                        总数据条数: parsedData.length,
+                        章节ID数量: chapterIdCount,
+                        章节ID列表: chapterIds,
+                        章节ID分布: chapterIdStats,
+                        无章节ID的数据条数: noChapterIdCount
+                    };
+                    
+                    // 对比分析：新生成的怪物组和上传的怪物组文件的差异
+                    if (generatedDataStats) {
+                        console.log('========== 章节ID差异分析 ==========');
+                        console.log('新生成的怪物组sheet页:', {
+                            章节ID数量: generatedDataStats.章节ID数量,
+                            章节ID列表: generatedDataStats.章节ID列表,
+                            章节ID分布: generatedDataStats.章节ID分布,
+                            总数据条数: generatedDataStats.总数据条数
+                        });
+                        console.log('新上传的怪物组文件:', {
+                            章节ID数量: uploadedDataStats.章节ID数量,
+                            章节ID列表: uploadedDataStats.章节ID列表,
+                            章节ID分布: uploadedDataStats.章节ID分布,
+                            总数据条数: uploadedDataStats.总数据条数,
+                            无章节ID的数据条数: uploadedDataStats.无章节ID的数据条数
+                        });
+                        
+                        // 找出差异
+                        const generatedChapterIdSet = new Set(generatedDataStats.章节ID列表);
+                        const uploadedChapterIdSet = new Set(uploadedDataStats.章节ID列表);
+                        
+                        // 找出只在生成数据中存在的章节ID
+                        const onlyInGenerated = generatedDataStats.章节ID列表.filter(id => !uploadedChapterIdSet.has(id));
+                        
+                        // 找出只在上传数据中存在的章节ID
+                        const onlyInUploaded = uploadedDataStats.章节ID列表.filter(id => !generatedChapterIdSet.has(id));
+                        
+                        // 找出两者都存在的章节ID，但数量不同
+                        const commonChapterIds = generatedDataStats.章节ID列表.filter(id => uploadedChapterIdSet.has(id));
+                        const countDifferences = [];
+                        commonChapterIds.forEach(id => {
+                            const generatedCount = generatedDataStats.章节ID分布[id] || 0;
+                            const uploadedCount = uploadedDataStats.章节ID分布[id] || 0;
+                            if (generatedCount !== uploadedCount) {
+                                countDifferences.push({
+                                    章节ID: id,
+                                    生成数据中的数量: generatedCount,
+                                    上传数据中的数量: uploadedCount,
+                                    差异: uploadedCount - generatedCount
+                                });
+                            }
+                        });
+                        
+                        // 输出差异分析
+                        console.log('差异分析结果:');
+                        if (onlyInGenerated.length > 0) {
+                            console.warn(`⚠️ 只在生成数据中存在的章节ID (${onlyInGenerated.length}个):`, onlyInGenerated);
+                        }
+                        if (onlyInUploaded.length > 0) {
+                            console.warn(`⚠️ 只在上传数据中存在的章节ID (${onlyInUploaded.length}个):`, onlyInUploaded);
+                        }
+                        if (countDifferences.length > 0) {
+                            console.warn(`⚠️ 章节ID数量不同的章节 (${countDifferences.length}个):`, countDifferences);
+                        }
+                        if (uploadedDataStats.无章节ID的数据条数 > 0) {
+                            console.warn(`⚠️ 上传数据中有 ${uploadedDataStats.无章节ID的数据条数} 条数据没有chapterId，这可能导致这些数据无法正确分配到章节`);
+                        }
+                        
+                        // 总结差异原因
+                        const reasons = [];
+                        if (onlyInGenerated.length > 0) {
+                            reasons.push(`生成数据中有 ${onlyInGenerated.length} 个章节ID在上传数据中不存在`);
+                        }
+                        if (onlyInUploaded.length > 0) {
+                            reasons.push(`上传数据中有 ${onlyInUploaded.length} 个章节ID在生成数据中不存在`);
+                        }
+                        if (countDifferences.length > 0) {
+                            reasons.push(`${countDifferences.length} 个章节的数据条数不同`);
+                        }
+                        if (uploadedDataStats.无章节ID的数据条数 > 0) {
+                            reasons.push(`上传数据中有 ${uploadedDataStats.无章节ID的数据条数} 条数据没有chapterId，可能因为无法从globalGeneratedData或globalPlanData中匹配到章节ID`);
+                        }
+                        if (generatedDataStats.章节ID数量 !== uploadedDataStats.章节ID数量) {
+                            reasons.push(`章节ID总数不同：生成数据有 ${generatedDataStats.章节ID数量} 个，上传数据有 ${uploadedDataStats.章节ID数量} 个`);
+                        }
+                        
+                        if (reasons.length > 0) {
+                            console.log('差异原因总结:');
+                            reasons.forEach((reason, index) => {
+                                console.log(`${index + 1}. ${reason}`);
+                            });
+                        } else {
+                            console.log('✅ 新生成的怪物组和上传的怪物组文件中，章节ID数量和分布完全相同');
+                        }
+                        console.log('=====================================');
                     }
                     
                     // 保存上传的数据
@@ -2853,31 +3384,26 @@
                         }
                     }
                     
-                    // 筛选该章节的怪物组数据（优先使用上传的数据）
-                    const sourceData = uploadedMonsterGroupData || globalGeneratedData;
-                    if (!sourceData) {
-                        console.error(`章节 ${chapterId} 没有怪物组数据`);
-                        return; // 跳过当前章节
-                    }
-                    const chapterGroupData = sourceData.filter(item => item.chapterId === chapterId);
-                    
-                    // 构建stage_id数据（逐行遍历，不去重）
+                    // ========== 构建stage_id数据 ==========
+                    // 对"关卡规划总"中对应章节id的"章节"列内容逐行遍历
                     const stageData = [];
                     chapterPlanData.forEach(item => {
                         const stageSeq = Number(item.stageSeq);
                         if (!isNaN(stageSeq)) {
                             stageData.push({
-                                id: stageSeq,
-                                chapterId: chapterId,
-                                stage: stageSeq,
-                                stageType: item.stageType,
-                                bossAnim: item.bossAnim || ''
+                                id: stageSeq,                      // 唯一ID：从"小关序号"列
+                                chapterId: chapterId,              // 章节ID：从"章节"列
+                                stage: stageSeq,                    // 层ID：从"小关序号"列
+                                stageType: item.stageType,         // 层类型：从"关卡类型"列
+                                bossAnim: item.bossAnim || ''      // BOSS虚影：从"怪物分布"中查找
                             });
                         }
                     });
                     stageData.sort((a, b) => a.id - b.id);
                     
-                    // 构建stageEvent_id数据（只处理关卡类型为4的行）
+                    // ========== 构建stageEvent_id数据 ==========
+                    // 对"关卡规划总"中对应章节id的"章节"列内容逐行遍历
+                    // 只处理"关卡类型"列为4的行
                     const eventData = [];
                     chapterPlanData.forEach(item => {
                         const stageType = Number(item.stageType);
@@ -2889,44 +3415,19 @@
                                 
                                 // 如果"随机事件(规划)"列有值（字符串类型），使用该值填入"事件随机"列
                                 const randomEventValue = item.randomEvent;
-                                
-                                // 调试日志：当小关序号为3时输出详细信息
-                                if (stageSeq === 3) {
-                                    console.log('小关序号为3的随机事件查找:', {
-                                        章节ID: chapterId,
-                                        小关序号: stageSeq,
-                                        关卡类型: stageType,
-                                        randomEventValue原始值: randomEventValue,
-                                        randomEventValue类型: typeof randomEventValue,
-                                        randomEventValue是否为空: randomEventValue === '' || randomEventValue === null || randomEventValue === undefined,
-                                        randomEventColIndex: randomEventColIndex,
-                                        _debugRandomEventRaw: item._debugRandomEventRaw,
-                                        item完整数据: item
-                                    });
-                                }
-                                
-                                // 更严格的判断：确保值不为空且不是空字符串
                                 const hasRandomEventValue = randomEventValue !== '' && 
                                                            randomEventValue !== null && 
                                                            randomEventValue !== undefined &&
                                                            String(randomEventValue).trim() !== '';
                                 
                                 if (hasRandomEventValue) {
-                                    // 确保是字符串类型
+                                    // 使用"随机事件(规划)"列的值
                                     eventId = String(randomEventValue).trim();
+                                    
                                     // 如果"首次随机事件"列有值，使用该值填入"首次事件"列
                                     const firstRandomEventValue = item.firstRandomEvent;
                                     if (firstRandomEventValue && firstRandomEventValue !== '' && firstRandomEventValue !== null && firstRandomEventValue !== undefined) {
                                         eventFirst = String(firstRandomEventValue).trim();
-                                    }
-                                    
-                                    // 调试日志
-                                    if (stageSeq === 3) {
-                                        console.log('使用随机事件(规划)列的值:', {
-                                            eventId: eventId,
-                                            firstRandomEventValue: firstRandomEventValue,
-                                            eventFirst: eventFirst
-                                        });
                                     }
                                 } else {
                                     // 如果"随机事件(规划)"列没有值，从"随机事件"sheet页中"事件分布"列所有数据中随机一个值
@@ -2936,64 +3437,121 @@
                                         eventId = String(selectedEvent.eventDistribution).trim();
                                         // 同时将该值对应的"首次事件"列的值填入"首次事件"列
                                         eventFirst = String(selectedEvent.firstEvent || '').trim();
-                                        
-                                        // 调试日志
-                                        if (stageSeq === 3) {
-                                            console.log('从随机事件sheet页随机选择:', {
-                                                随机选择的值: eventId,
-                                                首次事件: eventFirst
-                                            });
-                                        }
                                     }
                                 }
                                 
+                                // 如果"首次随机事件"列有值，使用该值填入"首次事件"列（覆盖之前的值）
+                                const firstRandomEventValue = item.firstRandomEvent;
+                                if (firstRandomEventValue && firstRandomEventValue !== '' && firstRandomEventValue !== null && firstRandomEventValue !== undefined) {
+                                    eventFirst = String(firstRandomEventValue).trim();
+                                }
+                                
                                 eventData.push({
-                                    id: stageSeq,
-                                    eventId: eventId,
-                                    eventFirst: eventFirst
+                                    id: stageSeq,           // 层ID：从"小关序号"列
+                                    eventId: eventId,        // 事件随机：从"随机事件(规划)"列或随机选择
+                                    eventFirst: eventFirst   // 首次事件：从"首次随机事件"列或随机选择对应的值
                                 });
                             }
                         }
                     });
                     eventData.sort((a, b) => a.id - b.id);
                     
-                    // 构建stageBattle_id数据（逐行遍历）
+                    // ========== 构建stageBattle_id数据 ==========
+                    // 对"关卡规划总"中对应章节id的"章节"列内容逐行遍历
                     const battleData = [];
                     chapterPlanData.forEach(item => {
                         const stageSeq = Number(item.stageSeq);
                         if (!isNaN(stageSeq)) {
-                            const group = stageSeq * 100 + 1;
+                            const group = stageSeq * 100 + 1;  // 随机敌人组：小关序号*100+1
                             battleData.push({
-                                id: stageSeq,
-                                hp: item.standardHp || '',
-                                atk: item.standardAtk || '',
-                                def: item.standardDef || '',
-                                firstHp: '',
-                                firstAtk: '',
-                                group: group,
-                                rogue: '',
-                                point: '',
-                                roll: '',
-                                diceHand: item.diceHand || '',
-                                prop: item.prop || '',
-                                enemyExp: item.enemyExp || '',
-                                stageExp: ''
+                                id: stageSeq,                          // 层ID：从"小关序号"列
+                                hp: item.standardHp || '',            // 标准血量：从"标准血量"列
+                                atk: item.standardAtk || '',          // 标准攻击力：从"标准攻击"列
+                                def: item.standardDef || '',          // 标准防御力：从"标准防御"列
+                                firstHp: '',                          // 第一次血量（空）
+                                firstAtk: '',                         // 第一次攻击力（空）
+                                group: group,                          // 随机敌人组：小关序号*100+1
+                                rogue: '',                             // 结束是否有rogue（空）
+                                point: '',                             // 第一次到达必出点数（空）
+                                roll: '',                              // 第几次重置出某个点数（空）
+                                diceHand: item.diceHand || '',         // 牌型概率：从"牌型概率"列（如果有值）
+                                prop: item.prop || '',                 // 道具掉落：从"道具掉落"列（如果有值）
+                                enemyExp: item.enemyExp || '',         // 单怪掉落经验值：从"单怪掉落经验值"列（如果有值）
+                                stageExp: ''                           // 过关经验值（空）
                             });
                         }
                     });
                     battleData.sort((a, b) => a.id - b.id);
                     
-                    // 构建group_id数据（从chapterGroupData）
+                    // ========== 筛选该章节的怪物组数据 ==========
+                    // 如果步骤2.5中上传了新的怪物组文件，优先使用上传的数据；否则使用步骤2生成的数据
+                    const sourceData = uploadedMonsterGroupData || globalGeneratedData;
+                    if (!sourceData) {
+                        console.error(`章节 ${chapterId} 没有怪物组数据`);
+                        return; // 跳过当前章节
+                    }
+                    
+                    // 根据章节ID筛选数据：只找章节id相同的"唯一ID"列
+                    // 例如导出第3章文件时，仅将"怪物组"页中章节id为3的"唯一ID"列内容，填入"group_3"的"唯一ID"列
+                    const numChapterId = Number(chapterId);
+                    
+                    // 严格筛选：只找章节id相同的数据
+                    // 确保item.chapterId不为null/undefined，且转换为数字后与当前章节ID相等
+                    const chapterGroupData = sourceData.filter(item => {
+                        // 如果chapterId为null或undefined，直接排除
+                        if (item.chapterId === null || item.chapterId === undefined) {
+                            return false;
+                        }
+                        // 转换为数字进行比较
+                        const itemChapterId = Number(item.chapterId);
+                        // 只找章节id相同的
+                        const isMatch = !isNaN(itemChapterId) && !isNaN(numChapterId) && itemChapterId === numChapterId;
+                        return isMatch;
+                    });
+                    
+                    // 调试日志：输出筛选结果
+                    console.log(`章节 ${chapterId} 数据筛选:`, {
+                        数据源: uploadedMonsterGroupData ? '上传的怪物组' : '生成的怪物组',
+                        筛选前总数据条数: sourceData.length,
+                        筛选后数据条数: chapterGroupData.length,
+                        当前查找章节ID: chapterId,
+                        筛选条件: `chapterId === ${numChapterId}`
+                    });
+                    
+                    // 验证筛选结果：确保所有数据的chapterId都是当前章节ID
+                    const invalidItems = chapterGroupData.filter(item => {
+                        const itemChapterId = Number(item.chapterId);
+                        return isNaN(itemChapterId) || itemChapterId !== numChapterId;
+                    });
+                    if (invalidItems.length > 0) {
+                        console.error(`错误：筛选结果中包含 ${invalidItems.length} 条chapterId不匹配的数据！`, {
+                            当前章节ID: chapterId,
+                            无效数据示例: invalidItems.slice(0, 3)
+                        });
+                    }
+                    
+                    if (chapterGroupData.length === 0) {
+                        const allChapterIds = [...new Set(sourceData.map(item => item.chapterId).filter(id => id !== null && id !== undefined))];
+                        console.warn(`章节 ${chapterId} 筛选后数据为空！`, {
+                            数据源章节ID列表: allChapterIds.sort((a, b) => a - b),
+                            当前查找章节ID: chapterId
+                        });
+                    }
+                    
+                    // ========== 构建group_id数据 ==========
+                    // 如果步骤2.5中上传了新的怪物组文件，则根据新上传的"怪物组"中对应章节id的"唯一ID"列内容进行遍历（只找章节id相同的"唯一ID"列）
+                    // 否则，根据新生成的"怪物组"中对应章节id下的"唯一ID"列内容进行遍历（只找章节id相同的"唯一ID"列）
+                    // 将对应章节id下的各个字段值填入"group_id"sheet页的对应列
                     const groupData = chapterGroupData.map(item => ({
-                        uniqueId: item.uniqueId,
-                        enemyGroupId: item.enemyGroupId,
-                        enemyId: item.enemyId,
-                        position: item.position,
-                        start: '',
-                        passiveSkill: '',
-                        hpTimes: item.hpTimes,
-                        atkTimes: item.atkTimes,
-                        skillOrder: item.skillOrder || '' // 从怪物组数据中读取技能顺序
+                        uniqueId: item.uniqueId,                    // 唯一ID：从怪物组数据的"唯一ID"列
+                        enemyGroupId: item.enemyGroupId,            // 敌人组ID：从怪物组数据的"敌人组ID"列
+                        enemyId: item.enemyId,                      // 敌人ID：从怪物组数据的"敌人ID"列
+                        position: item.position,                   // 站位：从怪物组数据的"站位"列
+                        start: '',                                  // 怪物初始状态（空）
+                        passiveSkill: '',                           // 常驻被动技能（空）
+                        hpTimes: item.hpTimes,                      // 标准血量倍率范围：从怪物组数据的"标准血量倍率范围"列
+                        atkTimes: item.atkTimes,                    // 标准攻击力倍率范围：从怪物组数据的"标准攻击力倍率范围"列
+                        skillOrder: item.skillOrder || ''           // 技能顺序：从怪物组数据的"技能顺序"列
                     })).sort((a, b) => {
                         // 先按enemyGroupId排序，再按uniqueId排序
                         if (a.enemyGroupId !== b.enemyGroupId) {
@@ -3290,4 +3848,5 @@
     </script>
 </body>
 </html>
+
 
