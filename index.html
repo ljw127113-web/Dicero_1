@@ -1609,7 +1609,7 @@
                 
                 // 根据规则计算标准血量倍率范围和标准攻击力倍率范围
                 // 规则：如果关卡类型为1或4，且章节ID为1，则填入"1*1"
-                //       如果关卡类型为1或4，但章节ID不为1，则填入"0.95*1.05"
+                //       如果关卡类型为1或4，但章节ID不为1，则填入"1*1"
                 //       如果关卡类型不为1或4，则填入"1*1"
                 const numStageType = Number(stageTypeValue);
                 let hpTimesValue = '1*1'; // 默认值
@@ -1621,9 +1621,9 @@
                         hpTimesValue = '1*1';
                         atkTimesValue = '1*1';
                     } else {
-                        // 章节ID不为1
-                        hpTimesValue = '0.95*1.05';
-                        atkTimesValue = '0.95*1.05';
+                        // 章节ID不为1，两个都填入1*1
+                        hpTimesValue = '1*1';
+                        atkTimesValue = '1*1';
                     }
                 } else {
                     // 关卡类型不为1或4
@@ -3787,6 +3787,8 @@
             let randomEventData = null;
             let eventDistributionColIndex = -1;
             let firstEventColIndex = -1;
+            let stageTotalColIndex = -1; // 关卡总数列索引
+            let eventDistribution1ColIndex = -1; // 事件分布(1)列索引
             for (let sheetName of workbookData.SheetNames) {
                 if (sheetName.includes('随机事件')) {
                     randomEventSheet = workbookData.Sheets[sheetName];
@@ -3800,6 +3802,13 @@
                             }
                             if (header.includes('首次事件') || header === '首次事件') {
                                 firstEventColIndex = i;
+                            }
+                            if (header.includes('关卡总数') || header === '关卡总数') {
+                                stageTotalColIndex = i;
+                            }
+                            if (header.includes('事件分布(1)') || header === '事件分布(1)' || 
+                                header.includes('事件分布（1）') || header === '事件分布（1）') {
+                                eventDistribution1ColIndex = i;
                             }
                         }
                     }
@@ -4021,6 +4030,22 @@
                     // 对"关卡规划总"中对应章节id的"章节"列内容逐行遍历
                     // 只处理"关卡类型"列为4的行
                     const eventData = [];
+                    
+                    // 计算本章节所有行的小关序号最大值（不管关卡类型）
+                    let maxStageSeq = 0;
+                    chapterPlanData.forEach(item => {
+                        const stageSeq = Number(item.stageSeq);
+                        if (!isNaN(stageSeq) && stageSeq > maxStageSeq) {
+                            maxStageSeq = stageSeq;
+                        }
+                    });
+                    
+                    console.log(`章节 ${chapterId} 小关序号最大值: ${maxStageSeq}`);
+                    console.log(`章节 ${chapterId} 关卡类型为4的小关序号列表:`, chapterPlanData.filter(item => Number(item.stageType) === 4).map(item => Number(item.stageSeq)).sort((a, b) => a - b));
+                    
+                    // 用于跟踪已使用的行号（在"随机事件"sheet页中）
+                    const usedRowIndices = new Set();
+                    
                     chapterPlanData.forEach(item => {
                         const stageType = Number(item.stageType);
                         if (stageType === 4) {
@@ -4028,6 +4053,12 @@
                             if (!isNaN(stageSeq)) {
                                 let eventId = '';
                                 let eventFirst = '';
+                                
+                                // 如果"首次随机事件"列有值，使用该值填入"首次事件"列
+                                const firstRandomEventValue = item.firstRandomEvent;
+                                if (firstRandomEventValue && firstRandomEventValue !== '' && firstRandomEventValue !== null && firstRandomEventValue !== undefined) {
+                                    eventFirst = String(firstRandomEventValue).trim();
+                                }
                                 
                                 // 如果"随机事件(规划)"列有值（字符串类型），使用该值填入"事件随机"列
                                 const randomEventValue = item.randomEvent;
@@ -4039,33 +4070,69 @@
                                 if (hasRandomEventValue) {
                                     // 使用"随机事件(规划)"列的值
                                     eventId = String(randomEventValue).trim();
-                                    
-                                    // 如果"首次随机事件"列有值，使用该值填入"首次事件"列
-                                    const firstRandomEventValue = item.firstRandomEvent;
-                                    if (firstRandomEventValue && firstRandomEventValue !== '' && firstRandomEventValue !== null && firstRandomEventValue !== undefined) {
-                                        eventFirst = String(firstRandomEventValue).trim();
-                                    }
                                 } else {
-                                    // 如果"随机事件(规划)"列没有值，从"随机事件"sheet页中"事件分布"列所有数据中随机一个值
-                                    if (randomEventList.length > 0) {
-                                        const randomIndex = Math.floor(Math.random() * randomEventList.length);
-                                        const selectedEvent = randomEventList[randomIndex];
-                                        eventId = String(selectedEvent.eventDistribution).trim();
-                                        // 同时将该值对应的"首次事件"列的值填入"首次事件"列
-                                        eventFirst = String(selectedEvent.firstEvent || '').trim();
+                                    // 如果"随机事件(规划)"列没有值，根据本章节关卡类型为4的小关序号最大值，在"随机事件"sheet页中"关卡总数"中查找相同的，且未使用过的行号中最小的一行
+                                    if (randomEventData && stageTotalColIndex >= 0 && eventDistribution1ColIndex >= 0 && firstEventColIndex >= 0 && maxStageSeq > 0) {
+                                        // 查找"关卡总数"等于maxStageSeq且未使用过的行号中最小的一行
+                                        let foundRowIndex = -1;
+                                        let minUnusedRowIndex = -1;
+                                        
+                                        for (let row = 1; row < randomEventData.length; row++) {
+                                            const stageTotal = Number(randomEventData[row][stageTotalColIndex]);
+                                            if (!isNaN(stageTotal) && stageTotal === maxStageSeq && !usedRowIndices.has(row)) {
+                                                if (minUnusedRowIndex === -1 || row < minUnusedRowIndex) {
+                                                    minUnusedRowIndex = row;
+                                                }
+                                            }
+                                        }
+                                        
+                                        if (minUnusedRowIndex >= 0) {
+                                            // 找到未使用过的行，使用该行
+                                            foundRowIndex = minUnusedRowIndex;
+                                            const eventDistribution1 = randomEventData[foundRowIndex][eventDistribution1ColIndex];
+                                            const firstEvent = randomEventData[foundRowIndex][firstEventColIndex];
+                                            eventId = eventDistribution1 !== '' && eventDistribution1 !== null && eventDistribution1 !== undefined ? String(eventDistribution1).trim() : '';
+                                            // 如果"首次随机事件"列没有值，使用该行对应的"首次事件"列的值
+                                            if (!eventFirst || eventFirst === '') {
+                                                eventFirst = firstEvent !== '' && firstEvent !== null && firstEvent !== undefined ? String(firstEvent).trim() : '';
+                                            }
+                                            // 标记该行已使用
+                                            usedRowIndices.add(foundRowIndex);
+                                            console.log(`章节 ${chapterId} 层ID ${stageSeq}: 找到"随机事件"sheet页第${foundRowIndex}行（关卡总数=${maxStageSeq}），事件随机="${eventId}"`);
+                                        } else {
+                                            // 如果所有行号都被使用过，则将使用过的最大行号的"事件分布(1)"列的值填入"事件随机"列
+                                            if (usedRowIndices.size > 0) {
+                                                const maxUsedRowIndex = Math.max(...Array.from(usedRowIndices));
+                                                const eventDistribution1 = randomEventData[maxUsedRowIndex][eventDistribution1ColIndex];
+                                                const firstEvent = randomEventData[maxUsedRowIndex][firstEventColIndex];
+                                                eventId = eventDistribution1 !== '' && eventDistribution1 !== null && eventDistribution1 !== undefined ? String(eventDistribution1).trim() : '';
+                                                // 如果"首次随机事件"列没有值，使用该行对应的"首次事件"列的值
+                                                if (!eventFirst || eventFirst === '') {
+                                                    eventFirst = firstEvent !== '' && firstEvent !== null && firstEvent !== undefined ? String(firstEvent).trim() : '';
+                                                }
+                                                console.log(`章节 ${chapterId} 层ID ${stageSeq}: 所有行已使用，使用最大行号${maxUsedRowIndex}，事件随机="${eventId}"`);
+                                            } else {
+                                                console.warn(`章节 ${chapterId} 层ID ${stageSeq}: 未找到"关卡总数"=${maxStageSeq}的行`);
+                                            }
+                                        }
+                                    } else {
+                                        // 如果找不到"关卡总数"或"事件分布(1)"列，回退到原来的随机选择逻辑
+                                        if (randomEventList.length > 0) {
+                                            const randomIndex = Math.floor(Math.random() * randomEventList.length);
+                                            const selectedEvent = randomEventList[randomIndex];
+                                            eventId = String(selectedEvent.eventDistribution).trim();
+                                            // 如果"首次随机事件"列没有值，使用该值对应的"首次事件"列的值
+                                            if (!eventFirst || eventFirst === '') {
+                                                eventFirst = String(selectedEvent.firstEvent || '').trim();
+                                            }
+                                        }
                                     }
-                                }
-                                
-                                // 如果"首次随机事件"列有值，使用该值填入"首次事件"列（覆盖之前的值）
-                                const firstRandomEventValue = item.firstRandomEvent;
-                                if (firstRandomEventValue && firstRandomEventValue !== '' && firstRandomEventValue !== null && firstRandomEventValue !== undefined) {
-                                    eventFirst = String(firstRandomEventValue).trim();
                                 }
                                 
                                 eventData.push({
                                     id: stageSeq,           // 层ID：从"小关序号"列
-                                    eventId: eventId,        // 事件随机：从"随机事件(规划)"列或随机选择
-                                    eventFirst: eventFirst   // 首次事件：从"首次随机事件"列或随机选择对应的值
+                                    eventId: eventId,        // 事件随机：从"随机事件(规划)"列或从"随机事件"sheet页查找
+                                    eventFirst: eventFirst   // 首次事件：从"首次随机事件"列或从"随机事件"sheet页查找
                                 });
                             }
                         }
