@@ -1310,6 +1310,7 @@
             let enemyPositionData = [];
             let enemyPositionHeader = [];
             let monsterCountColInPosition = -1; // 敌人站位中的怪物数量列
+            let stageTypeColInPosition = -1; // 敌人站位中的关卡类型列
             let positionIdColInPosition = -1; // 敌人站位中的站位id列
             
             for (let sheetName of workbookData.SheetNames) {
@@ -1331,12 +1332,18 @@
                         if (header.includes('怪物数量') || header === '怪物数量' || header.includes('数量')) {
                             monsterCountColInPosition = i;
                         }
+                        if (header.includes('关卡类型') || header === '关卡类型' || headerLower.includes('关卡类型') || 
+                            header.includes('类型') && (header.includes('关卡') || headerLower.includes('stage'))) {
+                            stageTypeColInPosition = i;
+                            console.log(`找到"关卡类型"列: 索引=${i}, 列名="${header}"`);
+                        }
                         if ((header.includes('站位') && header.includes('ID')) || headerLower.includes('站位id') || header === '站位ID' || header === '站位id') {
                             positionIdColInPosition = i;
                         }
                     }
                     console.log('敌人站位列索引:', {
                         monsterCountCol: monsterCountColInPosition,
+                        stageTypeCol: stageTypeColInPosition,
                         positionIdCol: positionIdColInPosition
                     });
                 }
@@ -1637,7 +1644,7 @@
                 }
 
                 // 根据"怪物数量"重复填写相应次数
-                // 在生成"敌人组ID"的同时，按章节ID分组计数生成"唯一ID"，并根据规则随机选择怪物ID
+                // 在生成"敌人组ID"的同时，按章节ID分组计数生成"唯一ID"，并根据规则选择怪物ID
                 // 注意：同一个enemyGroupId的所有记录，stageType、theme、stageSeq、hpTimes和atkTimes应该保持一致（都使用当前行的值）
                 for (let i = 0; i < numMonsterCount; i++) {
                     // 计数器加1，生成唯一ID
@@ -1645,14 +1652,29 @@
                     const uniqueId = chapterCounters[numChapter];
                     
                     // 根据关卡类型选择怪物ID
-                    // 如果关卡类型不是1或4，使用"boss和精英"列的值
-                    // 如果关卡类型是1或4，使用随机选择逻辑
+                    // 规则调整：
+                    // - 关卡类型为1或4：使用"怪物分布"中的随机逻辑（原有规则）
+                    // - 关卡类型为2：直接使用"boss和精英"列的值，若怪物数量>1，则在同一敌人组ID下复制该值
+                    // - 关卡类型为3：
+                    //     * 若怪物数量=1：同关卡类型2，使用"boss和精英"
+                    //     * 若怪物数量>1：第1个怪物使用"boss和精英"，其余怪物按关卡类型1的随机规则（使用章节ID对应主题的、关卡类型为1*4的怪物）
                     let enemyId = '';
                     if (!isNaN(numStageType) && (numStageType === 1 || numStageType === 4)) {
-                        // 关卡类型为1或4，使用随机选择逻辑
+                        // 关卡类型为1或4，使用原有随机选择逻辑
                         enemyId = selectMonsterId(theme, stageTypeStr, weightStr);
+                    } else if (!isNaN(numStageType) && numStageType === 2) {
+                        // 关卡类型为2，全部使用"boss和精英"列的值（多怪物时复制该值）
+                        enemyId = bossElite !== '' && bossElite !== null && bossElite !== undefined ? String(bossElite).trim() : '';
+                    } else if (!isNaN(numStageType) && numStageType === 3) {
+                        if (numMonsterCount <= 1 || i === 0) {
+                            // 怪物数量为1，或同一敌人组ID下的第一个怪物：使用"boss和精英"
+                            enemyId = bossElite !== '' && bossElite !== null && bossElite !== undefined ? String(bossElite).trim() : '';
+                        } else {
+                            // 其余怪物：按关卡类型1的随机规则（使用章节ID对应主题的、关卡类型为1*4的怪物）
+                            enemyId = selectMonsterId(theme, '1', weightStr);
+                        }
                     } else {
-                        // 关卡类型不是1或4，使用"boss和精英"列的值
+                        // 其它关卡类型（安全兜底）：使用"boss和精英"列的值
                         enemyId = bossElite !== '' && bossElite !== null && bossElite !== undefined ? String(bossElite).trim() : '';
                     }
                     
@@ -1673,25 +1695,63 @@
             }
             
             // 根据"敌人站位"表分配站位
-            // 按"敌人组ID"分组，为每组分配站位
-            function getPositionIdByMonsterCount(count) {
+            // 先判断怪物数量，再判断关卡类型，在怪物数量和关卡类型相同的情况下，在"站位id"行随机取值
+            function getPositionIdByMonsterCountAndStageType(count, stageType) {
                 if (!enemyPositionSheet || enemyPositionData.length === 0) {
-                    console.log(`怪物数量${count}: 未找到"敌人站位"sheet页或数据为空`);
+                    console.log(`怪物数量${count}, 关卡类型${stageType}: 未找到"敌人站位"sheet页或数据为空`);
                     return '';
                 }
                 if (monsterCountColInPosition < 0 || positionIdColInPosition < 0) {
-                    console.log(`怪物数量${count}: 未找到必要的列（怪物数量列: ${monsterCountColInPosition}, 站位id列: ${positionIdColInPosition}）`);
+                    console.log(`怪物数量${count}, 关卡类型${stageType}: 未找到必要的列（怪物数量列: ${monsterCountColInPosition}, 站位id列: ${positionIdColInPosition}）`);
                     return '';
                 }
                 
-                // 查找所有匹配的行
+                const numStageType = Number(stageType);
+                const stageTypeStr = String(stageType).trim();
+                
+                console.log(`查找站位: 怪物数量=${count}, 关卡类型=${stageType}, 敌人站位表是否有关卡类型列=${stageTypeColInPosition >= 0}`);
+                
+                // 查找所有匹配的行：先判断怪物数量，再判断关卡类型
                 const matchingRows = [];
                 for (let row = 1; row < enemyPositionData.length; row++) {
                     const rowMonsterCount = Number(enemyPositionData[row][monsterCountColInPosition]);
+                    // 先判断怪物数量
                     if (!isNaN(rowMonsterCount) && rowMonsterCount === count) {
-                        const positionId = String(enemyPositionData[row][positionIdColInPosition] || '').trim();
-                        if (positionId !== '') {
-                            matchingRows.push(positionId);
+                        // 再判断关卡类型（如果"敌人站位"sheet页中有"关卡类型"列）
+                        let stageTypeMatch = true;
+                        if (stageTypeColInPosition >= 0) {
+                            const rowStageTypeRaw = enemyPositionData[row][stageTypeColInPosition];
+                            const rowStageTypeStr = String(rowStageTypeRaw).trim();
+                            
+                            // 匹配规则：
+                            // 1) 若单元格为空，视为通配（允许匹配任意关卡类型，便于缺少类型值时仍能匹配）
+                            // 2) 若为组合字符串（如 "1*4"），用"*"分隔多个关卡类型，只要包含当前关卡类型即可匹配
+                            // 3) 若为单个数字/字符串（如 "1"、"2"、"3"），与当前关卡类型字符串完全相等则匹配
+                            if (rowStageTypeStr === '') {
+                                stageTypeMatch = true; // 通配
+                            } else if (rowStageTypeStr.includes('*')) {
+                                const parts = rowStageTypeStr.split('*').map(p => String(p).trim()).filter(p => p !== '');
+                                stageTypeMatch = parts.includes(stageTypeStr);
+                            } else {
+                                stageTypeMatch = (rowStageTypeStr === stageTypeStr);
+                            }
+                            
+                            if (!stageTypeMatch) {
+                                console.log(`  行${row}: 怪物数量匹配，但关卡类型不匹配，rowStageTypeRaw="${rowStageTypeRaw}", rowStageTypeStr="${rowStageTypeStr}", stageTypeStr="${stageTypeStr}"`);
+                            } else {
+                                console.log(`  行${row}: 怪物数量=${rowMonsterCount}, 关卡类型=${rowStageTypeStr}, 匹配成功`);
+                            }
+                        } else {
+                            // 如果没有"关卡类型"列，则只匹配怪物数量（但这种情况应该不会发生，因为用户要求按关卡类型匹配）
+                            console.warn(`  行${row}: 怪物数量=${rowMonsterCount}, 但"敌人站位"表中没有"关卡类型"列，无法按关卡类型匹配`);
+                        }
+                        
+                        if (stageTypeMatch) {
+                            const positionId = String(enemyPositionData[row][positionIdColInPosition] || '').trim();
+                            if (positionId !== '') {
+                                matchingRows.push(positionId);
+                                console.log(`  行${row}: 找到匹配的站位id: ${positionId}`);
+                            }
                         }
                     }
                 }
@@ -1699,57 +1759,102 @@
                 // 如果找到匹配的行，随机选择一行
                 if (matchingRows.length > 0) {
                     const randomIndex = Math.floor(Math.random() * matchingRows.length);
-                    console.log(`怪物数量${count}: 找到${matchingRows.length}个匹配的站位id，随机选择: ${matchingRows[randomIndex]}`);
+                    console.log(`怪物数量${count}, 关卡类型${stageType}: 找到${matchingRows.length}个匹配的站位id，随机选择: ${matchingRows[randomIndex]}`);
                     return matchingRows[randomIndex];
                 }
                 
-                console.log(`怪物数量${count}: 在"敌人站位"表中未找到匹配的怪物数量`);
+                console.warn(`怪物数量${count}, 关卡类型${stageType}: 在"敌人站位"表中未找到匹配的行`);
+                console.log(`  已检查的行数: ${enemyPositionData.length - 1}`);
+                console.log(`  怪物数量列索引: ${monsterCountColInPosition}`);
+                console.log(`  关卡类型列索引: ${stageTypeColInPosition}`);
+                console.log(`  站位id列索引: ${positionIdColInPosition}`);
                 return '';
             }
             
             // 分配站位：确保相邻行不重复
-            function assignPositions(groupData, monsterCount) {
-                if (groupData.length === 0) return;
-                if (monsterCount <= 0) return;
+            function assignPositions(groupData, monsterCount, stageType) {
+                if (groupData.length === 0) {
+                    console.warn(`assignPositions: groupData为空`);
+                    return;
+                }
+                if (monsterCount <= 0) {
+                    console.warn(`assignPositions: monsterCount=${monsterCount}无效`);
+                    return;
+                }
                 
-                // 从"敌人站位"表中获取站位id
-                const positionIdStr = getPositionIdByMonsterCount(monsterCount);
-                if (!positionIdStr || positionIdStr === '') return;
+                console.log(`assignPositions: 开始分配站位, groupData.length=${groupData.length}, monsterCount=${monsterCount}, stageType=${stageType}`);
+                if (groupData.length > 0) {
+                    console.log(`assignPositions: 第一个数据的enemyGroupId=${groupData[0].enemyGroupId}, stageType=${groupData[0].stageType}`);
+                }
+                
+                // 从"敌人站位"表中获取站位id（先判断怪物数量，再判断关卡类型）
+                const positionIdStr = getPositionIdByMonsterCountAndStageType(monsterCount, stageType);
+                if (!positionIdStr || positionIdStr === '') {
+                    console.warn(`assignPositions: 未找到匹配的站位id, monsterCount=${monsterCount}, stageType=${stageType}`);
+                    return;
+                }
+                
+                console.log(`assignPositions: 找到站位id字符串: ${positionIdStr}`);
                 
                 // 拆分站位id（例如"501*502*503"拆分为[501, 502, 503]）
                 const positionIds = positionIdStr.split('*').map(v => String(v).trim()).filter(v => v !== '');
-                if (positionIds.length === 0) return;
+                if (positionIds.length === 0) {
+                    console.warn(`assignPositions: 拆分后的站位id数组为空`);
+                    return;
+                }
                 
-                // 分配站位，确保所有数据都不重复
-                // 使用groupData.length而不是monsterCount，因为groupData.length是实际需要分配的行数
-                const needCount = groupData.length;
-                if (positionIds.length >= needCount) {
-                    // 如果拆分后的数量大于等于需要分配的数量，取前needCount个，打乱顺序后分配
-                    const shuffledPositions = positionIds.slice(0, needCount);
-                    // 打乱顺序（Fisher-Yates洗牌算法）
-                    for (let i = shuffledPositions.length - 1; i > 0; i--) {
-                        const j = Math.floor(Math.random() * (i + 1));
-                        [shuffledPositions[i], shuffledPositions[j]] = [shuffledPositions[j], shuffledPositions[i]];
-                    }
-                    // 按打乱后的顺序分配
+                console.log(`assignPositions: 拆分后的站位id数组: [${positionIds.join(', ')}]`);
+                
+                const numStageType = Number(stageType);
+                
+                // 特殊情况：如果怪物数量为2或者3，且关卡类型为3
+                // 要求：在怪物数量和关卡类型相同的情况下，先从"敌人站位"中选出一行站位id，
+                //       然后将拆分后的第1个值赋给该敌人组ID相邻且相同的第一个行，其余值按顺序赋给后续行
+                if ((monsterCount === 2 || monsterCount === 3) && !isNaN(numStageType) && numStageType === 3) {
+                    console.log(`assignPositions: 特殊情况处理 - 怪物数量=${monsterCount}, 关卡类型=${numStageType}`);
+                    // groupData 本身就是同一个 enemyGroupId 的一组相邻行
+                    // 按顺序直接使用 positionIds：第1行用第1个值，第2行用第2个值，第3行用第3个值...
                     for (let i = 0; i < groupData.length; i++) {
-                        groupData[i].position = shuffledPositions[i];
+                        const posIndex = i % positionIds.length;
+                        groupData[i].position = positionIds[posIndex];
+                        console.log(`  特殊情况：敌人组ID=${groupData[i].enemyGroupId}, 行索引${i}, 分配站位: ${positionIds[posIndex]}`);
                     }
                 } else {
-                    // 如果拆分后的数量小于需要分配的数量，循环使用
-                    for (let i = 0; i < groupData.length; i++) {
-                        groupData[i].position = positionIds[i % positionIds.length];
+                    console.log(`assignPositions: 普通情况处理 - 怪物数量=${monsterCount}, 关卡类型=${numStageType}`);
+                    // 普通情况：分配站位，确保所有数据都不重复
+                    // 使用groupData.length而不是monsterCount，因为groupData.length是实际需要分配的行数
+                    const needCount = groupData.length;
+                    if (positionIds.length >= needCount) {
+                        // 如果拆分后的数量大于等于需要分配的数量，取前needCount个，打乱顺序后分配
+                        const shuffledPositions = positionIds.slice(0, needCount);
+                        // 打乱顺序（Fisher-Yates洗牌算法）
+                        for (let i = shuffledPositions.length - 1; i > 0; i--) {
+                            const j = Math.floor(Math.random() * (i + 1));
+                            [shuffledPositions[i], shuffledPositions[j]] = [shuffledPositions[j], shuffledPositions[i]];
+                        }
+                        // 按打乱后的顺序分配
+                        for (let i = 0; i < groupData.length; i++) {
+                            groupData[i].position = shuffledPositions[i];
+                            console.log(`  普通情况：敌人组ID=${groupData[i].enemyGroupId}, 行索引${i}, 分配站位: ${shuffledPositions[i]}`);
+                        }
+                    } else {
+                        // 如果拆分后的数量小于需要分配的数量，循环使用
+                        for (let i = 0; i < groupData.length; i++) {
+                            groupData[i].position = positionIds[i % positionIds.length];
+                            console.log(`  普通情况（循环）: 敌人组ID=${groupData[i].enemyGroupId}, 行索引${i}, 分配站位: ${positionIds[i % positionIds.length]}`);
+                        }
                     }
                 }
             }
             
-            // 按"敌人组ID"+"怪物数量"分组，为每组分配站位
-            // 使用组合键：enemyGroupId + "_" + monsterCount
-            const enemyGroupMap = {}; // {enemyGroupId_monsterCount: [data1, data2, ...], ...}
+            // 按"敌人组ID"+"怪物数量"+"关卡类型"分组，为每组分配站位
+            // 使用组合键：enemyGroupId + "_" + monsterCount + "_" + stageType，避免不同关卡类型混用站位
+            const enemyGroupMap = {}; // {enemyGroupId_monsterCount_stageType: [data1, data2, ...], ...}
             for (let i = 0; i < generatedData.length; i++) {
                 const enemyGroupId = generatedData[i].enemyGroupId;
                 const monsterCount = generatedData[i].monsterCount;
-                const groupKey = enemyGroupId + "_" + monsterCount;
+                const stageTypeForGroup = generatedData[i].stageType || '';
+                const groupKey = enemyGroupId + "_" + monsterCount + "_" + stageTypeForGroup;
                 if (!enemyGroupMap[groupKey]) {
                     enemyGroupMap[groupKey] = [];
                 }
@@ -1759,11 +1864,12 @@
             // 为每组分配站位
             for (let groupKey in enemyGroupMap) {
                 const groupData = enemyGroupMap[groupKey];
-                // 直接从groupData中获取monsterCount，因为所有数据的monsterCount都相同
+                // 直接从groupData中获取monsterCount和stageType，因为所有数据的monsterCount和stageType都相同
                 if (groupData.length > 0 && groupData[0].monsterCount) {
                     const monsterCount = groupData[0].monsterCount;
-                    console.log(`为组分配站位: groupKey=${groupKey}, groupData.length=${groupData.length}, monsterCount=${monsterCount}`);
-                    assignPositions(groupData, monsterCount);
+                    const stageType = groupData[0].stageType || '';
+                    console.log(`为组分配站位: groupKey=${groupKey}, groupData.length=${groupData.length}, monsterCount=${monsterCount}, stageType=${stageType}`);
+                    assignPositions(groupData, monsterCount, stageType);
                 } else {
                     console.log(`组数据无效: groupKey=${groupKey}, groupData.length=${groupData.length}`);
                 }
